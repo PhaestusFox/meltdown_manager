@@ -1,8 +1,13 @@
+use std::fmt::Debug;
+
 use bevy::{platform::collections::HashMap, prelude::*};
+mod prefab;
+
+pub use prefab::{ChunkPrefab, ChunkPrefabLoader};
 
 use chunk_serde::CompressedChunkData;
 
-use super::{Blocks, CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, cellular_automata::AutomataChunk};
+use super::{Blocks, CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, cellular_automata::CellData};
 
 #[derive(Component, Deref, Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Reflect)]
 #[component(immutable, on_insert = ChunkId::on_insert, on_remove = ChunkId::on_remove)]
@@ -87,7 +92,7 @@ impl ChunkManager {
     fn save_chunk(
         &self,
         chunk: ChunkId,
-        data: &Query<(&VoxelChunk, &AutomataChunk)>,
+        data: &Query<(&Chunk<Blocks>, &Chunk<CellData>)>,
         path: &'static str,
     ) -> Result<(), ChunkManagerError> {
         let entity = self
@@ -107,34 +112,25 @@ enum ChunkManagerError {
     NoData(#[from] bevy::ecs::query::QueryEntityError),
 }
 
-#[derive(Component, PartialEq, Eq, Debug)]
-pub struct VoxelChunk {
-    blocks: [Blocks; CHUNK_VOL],
+#[derive(Component, Debug)]
+pub struct Chunk<T> {
+    blocks: [T; CHUNK_VOL],
 }
 
-impl VoxelChunk {
-    #[inline(always)]
-    pub fn get_block(&self, x: i32, y: i32, z: i32) -> Blocks {
-        if VoxelChunk::in_bounds(x, y, z) {
-            self.blocks[VoxelChunk::index(x, y, z)]
-        } else {
-            #[cfg(debug_assertions)]
-            panic!("Index({}, {}, {}) is out of bound", x, y, z);
-            #[allow(unreachable_code)] // can when not in debug
-            Blocks::Air
-        }
-    }
+impl<T: PartialEq + Eq> Eq for Chunk<T> {}
 
-    #[inline(always)]
-    pub fn set_block(&mut self, x: i32, y: i32, z: i32, to: Blocks) {
-        if VoxelChunk::in_bounds(x, y, z) {
-            self.blocks[VoxelChunk::index(x, y, z)] = to;
-        } else {
-            #[cfg(debug_assertions)]
-            panic!("Index({}, {}, {}) is out of bound", x, y, z);
+impl<T: PartialEq> PartialEq for Chunk<T> {
+    fn eq(&self, other: &Self) -> bool {
+        for i in 0..CHUNK_VOL {
+            if self.blocks[i] != other.blocks[i] {
+                return false;
+            }
         }
+        true
     }
+}
 
+impl<T> Chunk<T> {
     #[inline(always)]
     pub(super) fn index(x: i32, y: i32, z: i32) -> usize {
         x as usize + z as usize * CHUNK_SIZE + y as usize * CHUNK_ARIA
@@ -149,13 +145,53 @@ impl VoxelChunk {
             && y >= 0
             && z >= 0
     }
+}
 
-    #[inline]
-    fn blocks(&self) -> impl Iterator<Item = Blocks> {
-        ChunkBlockIter::new(self)
+impl<T: Copy + Default> Chunk<T> {
+    #[inline(always)]
+    pub fn get_block(&self, x: i32, y: i32, z: i32) -> T {
+        if Self::in_bounds(x, y, z) {
+            self.blocks[Self::index(x, y, z)]
+        } else {
+            #[cfg(debug_assertions)]
+            panic!("Index({}, {}, {}) is out of bound", x, y, z);
+            #[allow(unreachable_code)] // can when not in debug
+            T::default()
+        }
     }
 
-    pub fn compress(&self) -> CompressedChunkData<Blocks> {
+    #[inline(always)]
+    pub fn set_block(&mut self, x: i32, y: i32, z: i32, to: T) {
+        if Self::in_bounds(x, y, z) {
+            self.blocks[Self::index(x, y, z)] = to;
+        } else {
+            #[cfg(debug_assertions)]
+            panic!("Index({}, {}, {}) is out of bound", x, y, z);
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            blocks: [T::default(); CHUNK_VOL],
+        }
+    }
+
+    pub fn solid(fill: T) -> Self {
+        Self {
+            blocks: [fill; CHUNK_VOL],
+        }
+    }
+}
+
+impl<T: Copy> Chunk<T> {
+    #[inline]
+    fn blocks(&self) -> impl Iterator<Item = T> {
+        ChunkBlockIter::new(self)
+    }
+}
+
+impl<T: PartialEq + Copy + Default> Chunk<T> {
+    pub fn compress(&self) -> CompressedChunkData<T> {
         let mut solid = true;
         let mut longes_runs = [0; 10];
         let mut current_run = 1;
@@ -208,23 +244,11 @@ impl VoxelChunk {
         CompressedChunkData::RunLen(runs)
     }
 
-    pub fn empty() -> Self {
-        Self {
-            blocks: [Blocks::Air; CHUNK_VOL],
-        }
-    }
-
-    pub fn solid(fill: Blocks) -> Self {
-        Self {
-            blocks: [fill; CHUNK_VOL],
-        }
-    }
-
-    pub fn decompress(data: &CompressedChunkData<Blocks>) -> VoxelChunk {
+    pub fn decompress(data: &CompressedChunkData<T>) -> Chunk<T> {
         match data {
-            CompressedChunkData::Solid(block) => VoxelChunk::solid(*block),
+            CompressedChunkData::Solid(block) => Chunk::solid(*block),
             CompressedChunkData::RunLen(runs) => {
-                let mut chunk = VoxelChunk::empty();
+                let mut chunk = Chunk::empty();
                 let mut i = 0;
                 for (block, run) in runs {
                     for _ in 0..*run {
@@ -235,7 +259,7 @@ impl VoxelChunk {
                 chunk
             }
             CompressedChunkData::Raw(items) => {
-                let mut chunk = VoxelChunk::empty();
+                let mut chunk = Chunk::empty();
                 chunk.blocks.copy_from_slice(&items[..CHUNK_VOL]);
                 chunk
             }
@@ -245,28 +269,28 @@ impl VoxelChunk {
                 panic!(
                     "Got Compression Error({i});\n
                 Can't Decompress and error;\n
-                This will return VoxelChunk::empty() in release
+                This will return Chunk::empty() in release
                 "
                 );
                 #[allow(unreachable_code)] // will be when not debug_assertions
-                VoxelChunk::empty()
+                Chunk::empty()
             }
         }
     }
 }
 
-struct ChunkBlockIter<'a>(crate::utils::BlockIter<30, 30, 30>, &'a VoxelChunk);
+struct ChunkBlockIter<'a, T>(crate::utils::BlockIter<30, 30, 30>, &'a Chunk<T>);
 
-impl<'a> ChunkBlockIter<'a> {
-    fn new(chunk: &'a VoxelChunk) -> Self {
+impl<'a, T> ChunkBlockIter<'a, T> {
+    fn new(chunk: &'a Chunk<T>) -> Self {
         Self(crate::utils::BlockIter::new(), chunk)
     }
 }
 
-impl<'a> Iterator for ChunkBlockIter<'a> {
-    type Item = Blocks;
+impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
+    type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         let (x, y, z) = self.0.next()?;
-        Some(self.1.get_block(x, y, z))
+        Some(self.1.blocks[Chunk::<T>::index(x, y, z)])
     }
 }

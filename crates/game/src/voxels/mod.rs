@@ -1,10 +1,11 @@
-use bevy::{platform::collections::HashMap, prelude::*};
-use cellular_automata::AutomataChunk;
+use bevy::prelude::*;
+use cellular_automata::CellData;
+use chunk_serde::BinSerializer;
 use phoxels::{
     core::VoxelMaterial,
     prelude::{ChunkData, PhoxelGenerator, PhoxelsPlugin},
 };
-use voxel_chunk::{ChunkId, ChunkManager, VoxelChunk};
+use voxel_chunk::{Chunk, ChunkId, ChunkManager};
 
 mod cellular_automata;
 
@@ -15,7 +16,8 @@ pub const CHUNK_ARIA: usize = CHUNK_SIZE * CHUNK_SIZE;
 pub const CHUNK_VOL: usize = CHUNK_ARIA * CHUNK_SIZE;
 
 pub fn plugin(app: &mut App) {
-    app.insert_resource(Time::<Fixed>::from_hz(10.))
+    app.init_asset_loader::<voxel_chunk::ChunkPrefabLoader>()
+        .insert_resource(Time::<Fixed>::from_hz(10.))
         .init_resource::<ChunkManager>()
         .add_systems(Startup, spawn_test)
         .add_plugins(PhoxelsPlugin::<ChunkId>::default())
@@ -54,10 +56,8 @@ fn spawn_test(
             for y in -BY..=BY + 1 {
                 chunk_count += 1;
                 total_voxels += CHUNK_VOL;
-                let mut entity = commands.spawn((
-                    ChunkId::new(x, y, z),
-                    cellular_automata::AutomataChunk::empty(),
-                ));
+                let mut entity =
+                    commands.spawn((ChunkId::new(x, y, z), Chunk::<CellData>::empty()));
                 if x == 0 && z == 0 {
                     entity.insert((generator.clone(), MeshMaterial3d(matterial_handle.clone())));
                 }
@@ -70,9 +70,12 @@ fn spawn_test(
     );
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, strum_macros::EnumIter, strum_macros::FromRepr)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, strum_macros::EnumIter, strum_macros::FromRepr, Default,
+)]
 #[repr(u8)]
 enum Blocks {
+    #[default]
     Air = 0,
     Copper,
     Iron,
@@ -81,13 +84,13 @@ enum Blocks {
 }
 
 impl chunk_serde::Serialize for Blocks {
-    fn into_vec(&self, vec: &mut Vec<u8>) -> usize {
+    fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
         vec.push(*self as u8);
-        1
+        Ok(1)
     }
-    fn from_slice(slice: &[u8]) -> (Self, usize) {
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         #[cfg(debug_assertions)]
-        return (Blocks::from_repr(slice[0]).unwrap(), 1);
+        return Ok((Blocks::from_repr(slice[0]).unwrap(), 1));
         #[cfg(not(debug_assertions))]
         return (Blocks::from_repr(slice[0]).unwrap_or(Blocks::Air), 1);
     }

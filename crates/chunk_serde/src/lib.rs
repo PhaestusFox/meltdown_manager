@@ -1,35 +1,182 @@
 // don't ask why I have decided to role my own serde just felt like it ;P
 
-pub trait Serialize: Sized {
-    /// Add self to stream
-    /// Returns the num bytes Added
-    fn into_vec(&self, vec: &mut Vec<u8>) -> usize;
-    /// Get self from stream
-    /// Returns Self and bytes Used
-    fn from_slice(slice: &[u8]) -> (Self, usize);
+use std::fmt::Write;
+
+use bevy_ecs::error::BevyError;
+use bevy_ecs::error::Result;
+
+pub struct BinSerializer {
+    index: usize,
+    data: Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum CompressedChunkData<T: Eq + Serialize> {
+impl std::ops::Index<usize> for BinSerializer {
+    type Output = u8;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.data[index]
+    }
+}
+
+impl AsRef<[u8]> for BinSerializer {
+    fn as_ref(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+impl Default for BinSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BinSerializer {
+    pub fn new() -> BinSerializer {
+        BinSerializer {
+            index: 0,
+            data: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, byte: u8) {
+        self.data.push(byte);
+    }
+    pub fn finalize(self) -> Vec<u8> {
+        self.data
+    }
+    pub fn clear(&mut self) {
+        self.index = 0;
+        self.data.clear();
+    }
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    pub fn insert<T: Serialize>(&mut self, val: &T) -> Result<usize> {
+        match val.insert(self) {
+            Ok(v) => {
+                self.index += v;
+                Ok(v)
+            }
+            Err(e) => {
+                self.data.truncate(self.index);
+                Err(e)
+            }
+        }
+    }
+
+    pub fn extract<T: Serialize>(&mut self) -> Result<T> {
+        let (v, used) = T::extract(&self.data[self.index..])?;
+        self.index += used;
+        Ok(v)
+    }
+}
+
+pub struct StrSerializer {
+    index: usize,
+    data: String,
+}
+
+impl StrSerializer {
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+    pub fn in_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+    pub fn insert<T: Serialize>(&mut self, val: &T) -> Result<usize> {
+        val.insert_str(self)
+    }
+    pub fn extract<T: Serialize>(&mut self) -> Result<T> {
+        let (v, used) = T::extract_str(&self.data[self.index..])?;
+        self.index += used;
+        Ok(v)
+    }
+    pub fn push(&mut self, ch: char) {
+        self.data.push(ch);
+    }
+
+    pub fn push_str(&mut self, str: &str) {
+        self.data.push_str(str);
+    }
+
+    pub fn write(&mut self, args: std::fmt::Arguments<'_>) -> std::fmt::Result {
+        self.data.write_fmt(args)
+    }
+}
+
+pub trait Serialize: Sized {
+    /// Add self to binarty serializer
+    /// Returns the num bytes Added
+    fn insert(&self, serializer: &mut BinSerializer) -> Result<usize>;
+    /// Get self from slice
+    /// Returns Self and bytes Used
+    fn extract(slice: &[u8]) -> Result<(Self, usize)>;
+    /// Add self to str serializer
+    /// Returns the num char Added
+    fn insert_str(&self, _serializer: &mut StrSerializer) -> Result<usize> {
+        unimplemented!()
+    }
+
+    /// Get self from str
+    /// Returns the num char Used
+    fn extract_str(_str: &str) -> Result<(Self, usize)> {
+        unimplemented!()
+    }
+}
+
+#[derive(Eq, Debug)]
+pub enum CompressedChunkData<T> {
     Solid(T),
     RunLen(Vec<(T, u16)>),
     Raw(Vec<T>),
     Error(u8),
 }
 
+impl<T: Eq> PartialEq for CompressedChunkData<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            CompressedChunkData::Solid(v) => {
+                if let CompressedChunkData::Solid(o) = other {
+                    v == o
+                } else {
+                    false
+                }
+            }
+            CompressedChunkData::RunLen(v) => {
+                if let CompressedChunkData::RunLen(o) = other {
+                    v == o
+                } else {
+                    false
+                }
+            }
+            CompressedChunkData::Raw(v) => {
+                if let CompressedChunkData::Raw(o) = other {
+                    v == o
+                } else {
+                    false
+                }
+            }
+            CompressedChunkData::Error(_) => false,
+        }
+    }
+}
+
 impl<T: Serialize> Serialize for Vec<T> {
-    fn into_vec(&self, vec: &mut Vec<u8>) -> usize {
+    fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
         let mut len = 4;
         for l in self.len().to_be_bytes() {
             vec.push(l);
         }
         for item in self {
-            len += item.into_vec(vec);
+            len += item.insert(vec)?;
         }
-        len
+        Ok(len)
     }
 
-    fn from_slice(slice: &[u8]) -> (Self, usize) {
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         let mut len = 0usize.to_be_bytes();
         let mut used = 0;
         for byte in len.iter_mut() {
@@ -39,42 +186,213 @@ impl<T: Serialize> Serialize for Vec<T> {
         let len = usize::from_be_bytes(len);
         let mut out = Vec::with_capacity(len);
         for _ in 0..len {
-            let (t, con) = T::from_slice(&slice[used..]);
+            let (t, con) = T::extract(&slice[used..])?;
             out.push(t);
             used += con;
         }
-        (out, used)
+        Ok((out, used))
+    }
+
+    fn insert_str(&self, serializer: &mut StrSerializer) -> Result<usize> {
+        let mut used = 2;
+        serializer.push('[');
+        serializer.push('\n');
+        let mut trailing = false;
+        for val in self.iter() {
+            if trailing {
+                serializer.push(',');
+                serializer.push('\n');
+                used += 2;
+            } else {
+                trailing = true;
+            }
+            used += val.insert_str(serializer)?;
+        }
+        used += 2;
+        serializer.push_str("\n]");
+        Ok(used)
+    }
+
+    fn extract_str(str: &str) -> Result<(Self, usize)> {
+        let mut used = 0;
+        let mut skip = 0;
+        let mut out = None;
+        let mut exp = '[';
+        for char in str.chars() {
+            used += 1;
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            if char.is_whitespace() {
+                continue;
+            }
+            if char == '[' && out.is_none() {
+                let mut var = Vec::new();
+                let (res, len) = T::extract_str(&str[used..])?;
+                var.push(res);
+                skip += len;
+                out = Some(var);
+                exp = ']';
+                continue;
+            }
+            if char == ']' && out.is_some() {
+                break;
+            }
+            if char == ',' && out.is_none() {
+                if let Some(ref mut out) = out {
+                    let (res, len) = T::extract_str(&str[used..])?;
+                    out.push(res);
+                    skip += len;
+                    continue;
+                }
+            }
+            Err(StrError::WrongChar(exp, char))?;
+        }
+        Ok((out.ok_or(StrError::EOF)?, used))
     }
 }
 
 impl<T: Serialize> Serialize for (T, u16) {
-    fn into_vec(&self, vec: &mut Vec<u8>) -> usize {
-        let len = self.0.into_vec(vec) + 2;
+    fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
+        let len = self.0.insert(vec)? + 2;
         let be = self.1.to_be_bytes();
         vec.push(be[0]);
         vec.push(be[1]);
-        len
+        Ok(len)
     }
-    fn from_slice(slice: &[u8]) -> (Self, usize) {
-        let (t, at) = T::from_slice(slice);
-        ((t, u16::from_be_bytes([slice[at], slice[at + 1]])), at + 2)
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        let (t, at) = T::extract(slice)?;
+        Ok(((t, u16::from_be_bytes([slice[at], slice[at + 1]])), at + 2))
+    }
+    fn insert_str(&self, serializer: &mut StrSerializer) -> Result<usize> {
+        let start = serializer.len();
+        serializer.push('(');
+        self.0.insert_str(serializer)?;
+        serializer.push(',');
+        serializer.write(format_args!("{}", self.1));
+        serializer.push(')');
+        Ok(serializer.len() - start)
+    }
+    fn extract_str(str: &str) -> Result<(Self, usize)> {
+        let mut used = 0;
+        let mut out = None;
+        let mut expt = '(';
+        let mut len = None;
+        let mut skip = 0;
+        for char in str.chars() {
+            used += 1;
+            if skip > 0 {
+                skip -= 1;
+                continue;
+            }
+            if char.is_whitespace() {
+                continue;
+            }
+            if char == '(' && out.is_none() {
+                let (res, con) = T::extract_str(&str[used..])?;
+                out = Some(res);
+                skip += con;
+                expt = ',';
+                continue;
+            }
+            if char == ',' && out.is_some() && len.is_none() {
+                let (res, con) = u16::extract_str(&str[used..])?;
+                len = Some(res);
+                skip += con;
+                expt = ')';
+            }
+            if char == ')' && len.is_some() {
+                break;
+            }
+            return Err(StrError::WrongChar(expt, char))?;
+        }
+        match (out, len) {
+            (Some(out), Some(len)) => Ok(((out, len), used)),
+            (None, None) | (None, Some(_)) => Err(StrError::TupleError(0))?,
+            (Some(_), None) => Err(StrError::TupleError(1))?,
+        }
     }
 }
 
+impl Serialize for u16 {
+    fn insert(&self, serializer: &mut BinSerializer) -> Result<usize> {
+        let b = self.to_be_bytes();
+        serializer.push(b[0]);
+        serializer.push(b[1]);
+        Ok(2)
+    }
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        if slice.len() < 2 {
+            Err(BinError::EOF)?
+        }
+        Ok((u16::from_be_bytes([slice[0], slice[1]]), 2))
+    }
+    fn insert_str(&self, serializer: &mut StrSerializer) -> Result<usize> {
+        let start = serializer.len();
+        serializer.write(format_args!("{}", self))?;
+        Ok(serializer.len() - start)
+    }
+    fn extract_str(str: &str) -> Result<(Self, usize)> {
+        let mut used = 0;
+        let mut res = String::new();
+        for char in str.chars() {
+            if char.is_whitespace() && res.is_empty() {
+                used += 1;
+                continue;
+            }
+            if char.is_numeric() {
+                used += 1;
+                res.push(char);
+                continue;
+            }
+            if res.is_empty() {
+                Err(StrError::ExpectDigit(char))?;
+            }
+            break;
+        }
+        Ok((u16::from_str_radix(&res, 10)?, used))
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum BinError {
+    #[error("EOF")]
+    EOF,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum StrError {
+    #[error("EOF")]
+    EOF,
+    #[error("Expected {0} found {1}")]
+    WrongChar(char, char),
+    #[error("Expected Digtit found {0}")]
+    ExpectDigit(char),
+    #[error("Touple Missing field {0}")]
+    TupleError(u8),
+    #[error("Int Parse Error {0}")]
+    IntParseError(#[from] std::num::ParseIntError),
+    #[error("Ivalid Name: {0}\nMust be one of:\n{1:?}")]
+    InValidName(String, &'static [&'static str]),
+    #[error("Missing Char: Expected {0} before EOF")]
+    ExpectChar(char),
+}
+
 impl<T: Eq + Serialize> Serialize for CompressedChunkData<T> {
-    fn into_vec(&self, vec: &mut Vec<u8>) -> usize {
-        match self {
+    fn insert(&self, vec: &mut BinSerializer) -> Result<usize, BevyError> {
+        Ok(match self {
             CompressedChunkData::Solid(other) => {
                 vec.push(0);
-                other.into_vec(vec) + 1
+                other.insert(vec)? + 1
             }
             CompressedChunkData::RunLen(items) => {
                 vec.push(1);
-                items.into_vec(vec) + 1
+                items.insert(vec)? + 1
             }
             CompressedChunkData::Raw(items) => {
                 vec.push(2);
-                items.into_vec(vec) + 1
+                items.insert(vec)? + 1
             }
             CompressedChunkData::Error(i) => {
                 debug_assert!(false, "Dont serialize a CompressedChunkData::Error");
@@ -85,24 +403,87 @@ impl<T: Eq + Serialize> Serialize for CompressedChunkData<T> {
                 }
                 1
             }
+        })
+    }
+
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        match slice[0] {
+            0 => {
+                let (out, used) = T::extract(&slice[1..])?;
+                Ok((CompressedChunkData::Solid(out), used + 1))
+            }
+            1 => {
+                let (out, used) = Vec::extract(&slice[1..])?;
+                Ok((CompressedChunkData::RunLen(out), used + 1))
+            }
+            2 => {
+                let (out, used) = Vec::extract(&slice[1..])?;
+                Ok((CompressedChunkData::Raw(out), used + 1))
+            }
+            i => Ok((CompressedChunkData::Error(i), 1)),
         }
     }
 
-    fn from_slice(slice: &[u8]) -> (Self, usize) {
-        match slice[0] {
-            0 => {
-                let (out, used) = T::from_slice(&slice[1..]);
-                (CompressedChunkData::Solid(out), used + 1)
+    fn insert_str(&self, serializer: &mut StrSerializer) -> Result<usize> {
+        let mut used = 0;
+        match self {
+            CompressedChunkData::Solid(v) => {
+                used += 7;
+                serializer.push_str("Solid(");
+                used += v.insert_str(serializer)?;
+                serializer.push(')');
             }
-            1 => {
-                let (out, used) = Vec::from_slice(&slice[1..]);
-                (CompressedChunkData::RunLen(out), used + 1)
+            CompressedChunkData::RunLen(items) => {
+                used += 8;
+                serializer.push_str("RunLen(");
+                used += items.insert_str(serializer)?;
+                serializer.push(')');
             }
-            2 => {
-                let (out, used) = Vec::from_slice(&slice[1..]);
-                (CompressedChunkData::Raw(out), used + 1)
+            CompressedChunkData::Raw(items) => {
+                used += 5;
+                serializer.push_str("Raw(");
+                used += items.insert_str(serializer)?;
+                serializer.push(')');
             }
-            i => (CompressedChunkData::Error(i), 1),
+            CompressedChunkData::Error(_) => {
+                debug_assert!(false, "Don't Serialize Errors");
+                used += 7;
+                serializer.push_str("Error()");
+            }
         }
+        Ok(used)
+    }
+
+    fn extract_str(str: &str) -> Result<(Self, usize)> {
+        let mut used = 0;
+        let mut target = String::new();
+        for char in str.chars() {
+            used += 1;
+            if char.is_whitespace() && target.is_empty() {
+                continue;
+            }
+            if char == '(' && !target.is_empty() {
+                return match target.as_str() {
+                    "Solid" => {
+                        let (res, len) = T::extract_str(&str[used..])?;
+                        used += len;
+                        Ok((CompressedChunkData::Solid(res), used))
+                    }
+                    "RunLen" => {
+                        let (res, len) = Vec::extract_str(&str[used..])?;
+                        used += len;
+                        Ok((CompressedChunkData::RunLen(res), used))
+                    }
+                    "Raw" => {
+                        let (res, len) = Vec::extract_str(&str[used..])?;
+                        used += len;
+                        Ok((CompressedChunkData::Raw(res), used))
+                    }
+                    _ => Err(StrError::InValidName(target, &["Solid", "RunLen", "Raw"]).into()),
+                };
+            }
+            target.push(char);
+        }
+        Err(StrError::EOF.into())
     }
 }

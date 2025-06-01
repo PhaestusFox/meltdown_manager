@@ -31,8 +31,6 @@ fn player_look(
     //can use raw events
     // mut mouse_motion: EventReader<bevy::input::mouse::MouseMotion>,
     mouse_movement: Res<AccumulatedMouseMotion>,
-    // use delta time so mouse is consistent even when game is slow or at non 60 fps
-    time: Res<Time>,
     // use window to check if we should let the player look or not
     window: Single<&Window, With<PrimaryWindow>>,
     inputs: Res<ButtonInput<KeyCode>>,
