@@ -7,15 +7,15 @@ use bevy::{
     },
     prelude::*,
 };
+mod entity;
 mod fps;
-
 pub struct MeltdownDiagnosticsPlugin;
 
 impl Plugin for MeltdownDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
-        app.add_plugins(fps::plugin)
+        app.add_plugins((fps::plugin, entity::plugin))
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init);
     }

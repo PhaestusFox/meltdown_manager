@@ -3,7 +3,6 @@ use bevy::prelude::*;
 
 mod voxels;
 
-#[cfg(debug_assertions)]
 mod diagnostics;
 mod player;
 
@@ -24,7 +23,7 @@ pub fn run_game() {
     #[cfg(debug_assertions)]
     let default_plugins = default_plugins.set(WindowPlugin {
         primary_window: Some(Window {
-            present_mode: bevy::window::PresentMode::AutoVsync,
+            present_mode: bevy::window::PresentMode::AutoNoVsync,
             ..Default::default()
         }),
         ..Default::default()
@@ -34,12 +33,14 @@ pub fn run_game() {
     app
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)
-        .add_plugins(player::plugin)
+        .add_plugins((player::plugin, voxels::plugin))
         .add_systems(Startup, setup);
 
-    #[cfg(debug_assertions)]
-    app.add_plugins(bevy_editor_pls::EditorPlugin::default())
-        .add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
+    // add my diagnostics
+    app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
+    // only add editor in debug builds
+    // #[cfg(debug_assertions)]
+    // app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
     app.run();
 }
