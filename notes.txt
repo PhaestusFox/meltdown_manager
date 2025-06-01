@@ -1,0 +1,12 @@
+make basic reactor game
+each voxel has state {
+    temprature: u32,
+    presure: u32,
+    voltage: u32,
+}
+each voxel constants {
+    generateing: Option<u32>,
+    e_conductivity: [u32; 6],
+    t_conductivity: [u32; 6],
+    melting_point: u32,
+}
