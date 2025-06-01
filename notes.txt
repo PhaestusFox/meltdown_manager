@@ -1,12 +1,24 @@
 make basic reactor game
 each voxel has state {
-    temprature: u32,
-    presure: u32,
-    voltage: u32,
+    temprature: u32, K
+    presure: u32, Pa
+    charge: u32, C
 }
-each voxel constants {
+
+each voxel constants at STP {
     generateing: Option<u32>,
-    e_conductivity: [u32; 6],
-    t_conductivity: [u32; 6],
+    e_conductivity: u32,
+    t_conductivity: u32,
     melting_point: u32,
+    srength: u32,
+    mass: u32,
 }
+
+mesurments {
+    voltage: dif in charge,
+    presure: dif between min and max neigbor
+    amps: change in charge last tick
+    temprature: just read value
+}
+
+run celluler automiter at 10 hz

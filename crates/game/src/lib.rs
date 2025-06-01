@@ -1,23 +1,53 @@
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 
+mod voxels;
+
+#[cfg(debug_assertions)]
+mod diagnostics;
+mod player;
+
 pub fn run_game() {
-    App::new()
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
+    // this is what the template was doing
+    let default_plugins = DefaultPlugins
+        .set(AssetPlugin {
             // Wasm builds will check for meta files (that don't exist) if this isn't set.
             // This causes errors and even panics in web builds on itch.
             // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
             meta_check: AssetMetaCheck::Never,
             ..default()
-        }))
-        .add_systems(Startup, setup)
-        .run();
-}
+        })
+        // use nearest to get crisp pixel art
+        .set(ImagePlugin::default_nearest());
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera2d);
-    commands.spawn(Sprite {
-        image: asset_server.load("ducky.png"),
+    // if in debug build uncap framerate to make it easier to know if we have frame budgit
+    #[cfg(debug_assertions)]
+    let default_plugins = default_plugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            present_mode: bevy::window::PresentMode::AutoVsync,
+            ..Default::default()
+        }),
         ..Default::default()
     });
+
+    let mut app = App::new();
+    app
+        // add modifide DefaultPlugin
+        .add_plugins(default_plugins)
+        .add_plugins(player::plugin)
+        .add_systems(Startup, setup);
+
+    #[cfg(debug_assertions)]
+    app.add_plugins(bevy_editor_pls::EditorPlugin::default())
+        .add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
+
+    app.run();
+}
+
+fn setup(mut commands: Commands) {
+    commands.spawn((
+        Camera3d::default(),
+        player::Player { speed: 100. },
+        IsDefaultUiCamera,
+    ));
 }
