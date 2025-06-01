@@ -6,9 +6,9 @@ use bevy::{
 use super::DiagnosticSettings;
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins((bevy::diagnostic::EntityCountDiagnosticsPlugin::default(),))
+    app.add_plugins((bevy::diagnostic::EntityCountDiagnosticsPlugin))
         .add_systems(Startup, reg_tab)
-        .add_systems(Update, (update_count));
+        .add_systems(Update, update_count);
 }
 
 fn reg_tab(mut settings: ResMut<DiagnosticSettings>, mut commands: Commands) {

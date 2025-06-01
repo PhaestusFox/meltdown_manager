@@ -3,6 +3,8 @@ use bevy::prelude::*;
 
 mod voxels;
 
+mod ui;
+
 mod diagnostics;
 mod player;
 
@@ -34,7 +36,8 @@ pub fn run_game() {
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)
         .add_plugins((player::plugin, voxels::plugin))
-        .add_systems(Startup, setup);
+        .add_systems(Startup, setup)
+        .add_systems(Startup, ui::spawn_crosshair);
 
     // add my diagnostics
     app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
@@ -52,3 +55,5 @@ fn setup(mut commands: Commands) {
         IsDefaultUiCamera,
     ));
 }
+
+mod utils;

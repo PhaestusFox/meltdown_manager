@@ -7,9 +7,15 @@ edition = "2024"
 bevy = "0.16"
 fixed = "*"
 bevy_editor_pls = {git = "https://github.com/benfrankel/bevy_editor_pls.git", branch = "bevy-0-16"}
+phoxels = {git = "https://github.com/PhaestusFox/phoxels.git", branch = "jam_updates"}
+thiserror = "*"
+strum = "*"
+strum_macros = "*"
+chunk_serde = {path = "../chunk_serde"}
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
+rand = "*"
 
 [profile.dev.package."bevy_editor_pls"]
 
@@ -23,8 +29,8 @@ harness = false
 opt-level = 1
 
 # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
-[profile.dev.package."*"]
-opt-level = 3
+# [profile.dev.package."*"]
+# opt-level = 3
 
 # These lints may be important signals about code quality, but normal Bevy code
 # commonly triggers them and the CI workflow treats them as errors, so we've
