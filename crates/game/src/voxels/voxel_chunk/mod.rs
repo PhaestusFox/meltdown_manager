@@ -32,6 +32,18 @@ impl ChunkId {
         let id = *world
             .get::<ChunkId>(ctx.entity)
             .expect("This Just got inserted");
+        world
+            .get_mut::<Transform>(ctx.entity)
+            .expect("Required Componet")
+            .translation = (id.0 * CHUNK_SIZE as i32).as_vec3();
+
+        if world.get::<Name>(ctx.entity).is_none() {
+            world
+                .commands()
+                .entity(ctx.entity)
+                .insert(Name::new(format!("{}", id)));
+        }
+
         if let Some(old) = world
             .resource_mut::<ChunkManager>()
             .insert_chunk(id, ctx.entity)
@@ -114,7 +126,7 @@ enum ChunkManagerError {
 
 #[derive(Component, Debug)]
 pub struct Chunk<T> {
-    blocks: [T; CHUNK_VOL],
+    blocks: Vec<T>,
 }
 
 impl<T: PartialEq + Eq> Eq for Chunk<T> {}
@@ -145,6 +157,11 @@ impl<T> Chunk<T> {
             && y >= 0
             && z >= 0
     }
+
+    pub fn set_by_index(&mut self, index: usize, to: T) {
+        debug_assert!(index < CHUNK_VOL);
+        self.blocks[index] = to;
+    }
 }
 
 impl<T: Copy + Default> Chunk<T> {
@@ -172,21 +189,26 @@ impl<T: Copy + Default> Chunk<T> {
 
     pub fn empty() -> Self {
         Self {
-            blocks: [T::default(); CHUNK_VOL],
+            blocks: vec![T::default(); CHUNK_VOL],
         }
     }
 
     pub fn solid(fill: T) -> Self {
         Self {
-            blocks: [fill; CHUNK_VOL],
+            blocks: vec![fill; CHUNK_VOL],
         }
     }
 }
 
 impl<T: Copy> Chunk<T> {
     #[inline]
-    fn blocks(&self) -> impl Iterator<Item = T> {
+    pub fn blocks(&self) -> impl Iterator<Item = T> {
         ChunkBlockIter::new(self)
+    }
+
+    pub fn get_by_index(&self, index: usize) -> T {
+        debug_assert!(index < CHUNK_VOL);
+        self.blocks[index]
     }
 }
 
@@ -223,7 +245,7 @@ impl<T: PartialEq + Copy + Default> Chunk<T> {
         } else
         // 9000 is the min number of runs required for this to be smaller then just saving every block
         if total_runs > 9001 {
-            return CompressedChunkData::Raw(self.blocks.into());
+            return CompressedChunkData::Raw(self.blocks.clone());
         };
         // do run len encoding
         // maybe move this to top and make this encoding on first loop

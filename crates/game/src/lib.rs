@@ -42,14 +42,15 @@ pub fn run_game() {
     // add my diagnostics
     app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
     // only add editor in debug builds
-    // #[cfg(debug_assertions)]
-    // app.add_plugins(bevy_editor_pls::EditorPlugin::default());
+    #[cfg(debug_assertions)]
+    app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
     app.run();
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn((
+        Name::new("Player"),
         Camera3d::default(),
         player::Player { speed: 100. },
         IsDefaultUiCamera,

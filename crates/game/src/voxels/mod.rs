@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 use cellular_automata::CellData;
 use chunk_serde::BinSerializer;
+use noise::{MultiFractal, NoiseFn};
 use phoxels::{
     core::VoxelMaterial,
     prelude::{ChunkData, PhoxelGenerator, PhoxelsPlugin},
 };
-use voxel_chunk::{Chunk, ChunkId, ChunkManager};
-
-mod cellular_automata;
+use strum::EnumCount;
+use voxel_chunk::ChunkManager;
+pub use voxel_chunk::{Chunk, ChunkId};
+pub mod cellular_automata;
 
 mod voxel_chunk;
 
@@ -16,25 +18,72 @@ pub const CHUNK_ARIA: usize = CHUNK_SIZE * CHUNK_SIZE;
 pub const CHUNK_VOL: usize = CHUNK_ARIA * CHUNK_SIZE;
 
 pub fn plugin(app: &mut App) {
+    let noise = MapNoise::new();
     app.init_asset_loader::<voxel_chunk::ChunkPrefabLoader>()
         .insert_resource(Time::<Fixed>::from_hz(10.))
         .init_resource::<ChunkManager>()
         .add_systems(Startup, spawn_test)
         .add_plugins(PhoxelsPlugin::<ChunkId>::default())
-        .insert_resource(PhoxelGenerator::new(|id: ChunkId| {
-            println!("gen data for {}", id);
-            if id.y == 0 {
-                ChunkData::solid(Blocks::Copper)
-            } else {
-                ChunkData::empty()
+        .insert_resource(PhoxelGenerator::new(move |id: ChunkId| {
+            let noise = noise.clone();
+            let mut chunk = ChunkData::new(UVec3::splat(CHUNK_SIZE as u32));
+            for x in 0..CHUNK_SIZE as i32 {
+                for z in 0..CHUNK_SIZE as i32 {
+                    let gx = id.x * CHUNK_SIZE as i32 + x;
+                    let gz = id.z * CHUNK_SIZE as i32 + z;
+                    let h = noise.get_ground(gx, gz);
+                    let start_y = id.y * CHUNK_SIZE as i32;
+                    if start_y > h {
+                        continue;
+                    }
+                    let num_blocks = Blocks::COUNT as f64 - 1.;
+                    for y in 0..(h - start_y).min(30) {
+                        let r = ((noise.sample(gx, y + start_y, gz) * 10.) % num_blocks) as u8;
+                        let block = Blocks::from_repr(r + 1).unwrap_or_default();
+                        chunk.set_block(x as u32, y as u32, z as u32, block);
+                        assert_eq!(chunk.texture(x as u32, y as u32, z as u32), r as u32 + 1);
+                    }
+                }
             }
+            chunk
         }));
+    app.add_plugins(cellular_automata::plugin);
+}
+
+#[derive(Clone)]
+struct MapNoise {
+    noise: std::sync::Arc<noise::Fbm<noise::Simplex>>,
+    ground: i32,
+}
+
+impl MapNoise {
+    fn new() -> MapNoise {
+        let mut noise = noise::Fbm::new(0);
+        noise.frequency = 0.01;
+        noise = noise.set_persistence(0.2);
+        MapNoise {
+            noise: std::sync::Arc::new(noise),
+            ground: 32,
+        }
+    }
+
+    fn sample(&self, x: i32, y: i32, z: i32) -> f64 {
+        let mut h = self.noise.get([x as f64, y as f64, z as f64]);
+        h += 1.;
+        h /= 2.;
+        h
+    }
+
+    fn get_ground(&self, x: i32, z: i32) -> i32 {
+        let h = self.sample(x, 0, z) * self.ground as f64;
+        h as i32
+    }
 }
 
 // set to 16 for final test
-const BX: i32 = 1;
+const BX: i32 = 5;
 // set to 16 for final test
-const BZ: i32 = 1;
+const BZ: i32 = 5;
 // set to 16 for final test
 const BY: i32 = 1;
 
@@ -56,11 +105,12 @@ fn spawn_test(
             for y in -BY..=BY + 1 {
                 chunk_count += 1;
                 total_voxels += CHUNK_VOL;
-                let mut entity =
-                    commands.spawn((ChunkId::new(x, y, z), Chunk::<CellData>::empty()));
-                if x == 0 && z == 0 {
-                    entity.insert((generator.clone(), MeshMaterial3d(matterial_handle.clone())));
-                }
+                commands.spawn((
+                    ChunkId::new(x, y, z),
+                    Chunk::<CellData>::empty(),
+                    generator.clone(),
+                    MeshMaterial3d(matterial_handle.clone()),
+                ));
             }
         }
     }
@@ -71,7 +121,15 @@ fn spawn_test(
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, Debug, strum_macros::EnumIter, strum_macros::FromRepr, Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    strum_macros::EnumIter,
+    strum_macros::FromRepr,
+    Default,
+    strum_macros::EnumCount,
 )]
 #[repr(u8)]
 enum Blocks {
@@ -98,7 +156,7 @@ impl chunk_serde::Serialize for Blocks {
 
 impl phoxels::prelude::Block for Blocks {
     fn id(&self) -> u8 {
-        *self as u8 - 1
+        *self as u8
     }
     fn is_solid(&self) -> bool {
         true

@@ -1,12 +1,12 @@
 use bevy::{
-    diagnostic::{DiagnosticsStore, EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
+    diagnostic::{DiagnosticsStore, EntityCountDiagnosticsPlugin},
     prelude::*,
 };
 
 use super::DiagnosticSettings;
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins((bevy::diagnostic::EntityCountDiagnosticsPlugin))
+    app.add_plugins(bevy::diagnostic::EntityCountDiagnosticsPlugin)
         .add_systems(Startup, reg_tab)
         .add_systems(Update, update_count);
 }

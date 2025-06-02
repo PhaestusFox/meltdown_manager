@@ -1,14 +1,9 @@
+use std::ops::{Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
+use super::FixedNum;
+use super::*;
 use bevy::prelude::*;
-use chunk_serde::{BinSerializer, StrError};
-
-const K_AT_20C: FixedNum = FixedNum::lit("293.15");
-const ATM_1: FixedNum = FixedNum::lit("101.325");
-const STD_CHARGE: FixedNum = FixedNum::lit("0");
-
-pub type FixedNum = fixed::types::I22F10;
-use super::{voxel_chunk::Chunk, *};
-
-pub struct PrevioseChunk(Chunk<CellData>);
+use chunk_serde::BinSerializer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellData {
@@ -90,5 +85,99 @@ impl Default for CellData {
             presure: ATM_1,
             charge: STD_CHARGE,
         }
+    }
+}
+
+impl CellData {
+    pub const MIN: CellData = CellData {
+        temperature: FixedNum::MIN,
+        charge: FixedNum::MIN,
+        presure: FixedNum::MIN,
+    };
+    pub const MAX: CellData = CellData {
+        temperature: FixedNum::MAX,
+        charge: FixedNum::MAX,
+        presure: FixedNum::MAX,
+    };
+
+    pub fn min(&mut self, other: &Self) {
+        self.temperature = self.temperature.min(other.temperature);
+        self.charge = self.charge.min(other.charge);
+        self.presure = self.presure.min(other.presure);
+    }
+
+    pub fn max(&mut self, other: &Self) {
+        self.temperature = self.temperature.max(other.temperature);
+        self.charge = self.charge.max(other.charge);
+        self.presure = self.presure.max(other.presure);
+    }
+
+    pub fn any_zero(&self) -> bool {
+        self.temperature.is_zero() | self.charge.is_zero() | self.presure.is_zero()
+    }
+}
+
+impl Sub for CellData {
+    type Output = Self;
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign for CellData {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.temperature -= rhs.temperature;
+        self.presure -= rhs.presure;
+        self.charge -= rhs.charge;
+    }
+}
+
+impl Div for CellData {
+    type Output = Self;
+    fn div(mut self, rhs: Self) -> Self::Output {
+        self /= rhs;
+        self
+    }
+}
+
+impl DivAssign for CellData {
+    fn div_assign(&mut self, rhs: Self) {
+        self.temperature /= rhs.temperature;
+        self.charge /= rhs.charge;
+        self.presure /= rhs.presure;
+    }
+}
+
+impl MulAssign for CellData {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.temperature *= rhs.temperature;
+        self.presure *= rhs.presure;
+        self.charge *= rhs.charge;
+    }
+}
+
+impl Mul for CellData {
+    type Output = Self;
+    fn mul(mut self, rhs: Self) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
+impl<T: fixed::traits::ToFixed> MulAssign<T> for CellData {
+    fn mul_assign(&mut self, rhs: T) {
+        let num = FixedNum::from_num(rhs);
+        self.temperature *= num;
+        self.presure *= num;
+        self.charge *= num;
+    }
+}
+
+impl<T: fixed::traits::ToFixed> Mul<T> for CellData {
+    type Output = Self;
+    fn mul(mut self, rhs: T) -> Self::Output {
+        self *= rhs;
+        self
     }
 }

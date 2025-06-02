@@ -9,6 +9,8 @@ use bevy::{
 };
 mod entity;
 mod fps;
+pub mod shader;
+
 pub struct MeltdownDiagnosticsPlugin;
 
 impl Plugin for MeltdownDiagnosticsPlugin {
@@ -16,6 +18,7 @@ impl Plugin for MeltdownDiagnosticsPlugin {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
         app.add_plugins((fps::plugin, entity::plugin))
+            .add_plugins(shader::plugin)
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init);
     }
@@ -28,6 +31,7 @@ pub struct DiagnosticSettings {
     pub registured_tabs: Vec<DiagnosticTab>,
     pub tab_style: Node,
     pub tab_color: (Color, Color),
+    pub cell_mode: crate::voxels::cellular_automata::CellMode,
 }
 
 impl DiagnosticSettings {
@@ -61,6 +65,7 @@ impl Default for DiagnosticSettings {
                 Color::linear_rgb(0.4, 0.4, 0.4),
                 Color::linear_rgb(0.3, 0.3, 0.3),
             ),
+            cell_mode: crate::voxels::cellular_automata::CellMode::All,
         }
     }
 }

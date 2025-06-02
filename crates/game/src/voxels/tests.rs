@@ -1,4 +1,7 @@
-use rand::{Rng, seq::SliceRandom};
+use rand::{
+    Rng,
+    seq::{IndexedRandom, SliceRandom},
+};
 use strum::IntoEnumIterator;
 
 use super::{Blocks, voxel_chunk::Chunk};
@@ -146,9 +149,9 @@ fn fuzz_compression() {
     let block: Vec<_> = Blocks::iter().collect();
     for _ in 0..27000 {
         chunk.set_block(
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
             *block.choose(&mut rng).unwrap(),
         );
         let comp = chunk.compress();
@@ -180,9 +183,9 @@ fn fuzz_serde() {
     }
     for _ in 0..27000 {
         chunk.set_block(
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
             *block.choose(&mut rng).unwrap(),
         );
         test!(chunk);
@@ -248,13 +251,13 @@ fn fuzz_cell_compression() {
 
     let div = FixedNum::from_num(100.);
     for _ in 0..27000 {
-        let x = rng.gen_range(0..10000);
-        let y = rng.gen_range(0..10000);
-        let z = rng.gen_range(0..10000);
+        let x = rng.random_range(0..10000);
+        let y = rng.random_range(0..10000);
+        let z = rng.random_range(0..10000);
         chunk.set_block(
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
             CellData {
                 temperature: FixedNum::from_num(x) / div,
                 charge: FixedNum::from_num(y) / div,
@@ -290,13 +293,13 @@ fn fuzz_cell_serde() {
     }
     let div = FixedNum::from_num(100.);
     for _ in 0..27000 {
-        let x = rng.gen_range(0..10000);
-        let y = rng.gen_range(0..10000);
-        let z = rng.gen_range(0..10000);
+        let x = rng.random_range(0..10000);
+        let y = rng.random_range(0..10000);
+        let z = rng.random_range(0..10000);
         chunk.set_block(
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
-            rng.gen_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
+            rng.random_range(0..30),
             CellData {
                 temperature: FixedNum::from_num(x) / div,
                 charge: FixedNum::from_num(y) / div,

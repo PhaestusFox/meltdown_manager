@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = "0.16"
+bevy = {version = "0.16", features = ["file_watcher"]}
 fixed = "*"
 bevy_editor_pls = {git = "https://github.com/benfrankel/bevy_editor_pls.git", branch = "bevy-0-16"}
 phoxels = {git = "https://github.com/PhaestusFox/phoxels.git", branch = "jam_updates"}
@@ -12,6 +12,7 @@ thiserror = "*"
 strum = "*"
 strum_macros = "*"
 chunk_serde = {path = "../chunk_serde"}
+noise = "*"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
