@@ -4,8 +4,10 @@ use rand::{
 };
 use strum::IntoEnumIterator;
 
-use super::{Blocks, voxel_chunk::Chunk};
-use crate::{utils::BlockIter, voxels::CHUNK_VOL};
+use crate::{
+    utils::BlockIter,
+    voxels::{CHUNK_VOL, blocks::Blocks, voxel_chunk::chunk::Chunk},
+};
 use chunk_serde::{BinSerializer, CompressedChunkData};
 
 #[test]

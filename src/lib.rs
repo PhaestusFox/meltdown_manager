@@ -36,9 +36,9 @@ pub fn run_game() {
     app
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)
-        .add_plugins((player::plugin, voxels::plugin))
+        .add_plugins((player::plugin, voxels::map::map_plugin))
         .add_systems(Startup, setup)
-        .add_systems(Startup, ui::spawn_crosshair);
+        .add_systems(Startup, ui::ui::spawn_crosshair);
 
     // add my diagnostics
     app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);

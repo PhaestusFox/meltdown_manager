@@ -1,13 +1,19 @@
 use bevy::prelude::*;
 
-const CHUNK_SIZE: i32 = crate::voxels::CHUNK_SIZE as i32;
+const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE as i32;
 const SUM_DIVISOR: FixedNum = FixedNum::lit("6.0");
 
 use crate::voxels::{
-    Blocks, Chunk, ChunkData, cellular_automata::FixedNum, voxel_chunk::Neighbours,
+    blocks::{self, Blocks},
+    cellular_automata::FixedNum,
+    map::ChunkData,
+    voxel_chunk::chunk::{Chunk, Neighbours},
 };
 
-use super::{CellData, PrevioseStep};
+use super::CellData;
+
+#[derive(Component)]
+pub struct PreviousStep(Chunk<CellData>);
 
 #[derive(Clone, Copy, Deref, DerefMut)]
 struct CellId(IVec3);
@@ -214,7 +220,7 @@ impl<'a> ChunkGared<'a> {
 
 pub fn step_system(
     max: NonSend<super::diagnostics::MaxValue>,
-    start_state: Query<&PrevioseStep>,
+    start_state: Query<&PreviousStep>,
     mut new_state: Query<(Entity, &mut Chunk<CellData>, &Neighbours, &ChunkData)>,
 ) {
     let sender = max.get_sender();
@@ -259,15 +265,15 @@ fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>) -> CellData {
 }
 
 pub fn set_prev(
-    mut chunks: Query<(&mut Chunk<CellData>, &mut PrevioseStep)>,
-    mut to_init: Query<(Entity, &mut Chunk<CellData>), Without<PrevioseStep>>,
+    mut chunks: Query<(&mut Chunk<CellData>, &mut PreviousStep)>,
+    mut to_init: Query<(Entity, &mut Chunk<CellData>), Without<PreviousStep>>,
     mut commands: Commands,
 ) {
     for (mut chunk, mut last) in &mut chunks {
         std::mem::swap(&mut last.0, &mut chunk);
     }
     for (entity, mut chunk) in &mut to_init {
-        let prev = PrevioseStep(std::mem::replace(chunk.as_mut(), Chunk::empty()));
+        let prev = PreviousStep(std::mem::replace(chunk.as_mut(), Chunk::empty()));
         commands.entity(entity).insert(prev);
     }
 }

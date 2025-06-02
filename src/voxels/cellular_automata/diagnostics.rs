@@ -94,7 +94,11 @@ pub enum CellMode {
 use crate::{
     diagnostics::shader::DebugMaterial,
     utils::BlockIter,
-    voxels::{CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, Chunk, ChunkId, cellular_automata::FixedNum},
+    voxels::{
+        Chunk, ChunkId,
+        cellular_automata::FixedNum,
+        map::{CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL},
+    },
 };
 
 use super::CellData;

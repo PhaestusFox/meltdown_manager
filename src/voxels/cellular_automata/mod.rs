@@ -1,18 +1,11 @@
-const K_AT_20C: FixedNum = FixedNum::lit("293.15");
-const ATM_1: FixedNum = FixedNum::lit("101.325");
-const STD_CHARGE: FixedNum = FixedNum::lit("0");
+mod cells;
+mod consts;
 mod diagnostics;
-pub type FixedNum = fixed::types::I22F10;
-use super::voxel_chunk::Chunk;
-
-#[derive(Component)]
-pub struct PrevioseStep(Chunk<CellData>);
+mod logic;
 
 pub use cells::{BlockProperties, CellData};
+pub use consts::*;
 pub use diagnostics::{AutomitaDiagnosticChunk, CellMode};
-
-mod cells;
-mod logic;
 
 use bevy::prelude::*;
 
