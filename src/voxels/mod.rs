@@ -3,14 +3,16 @@ use cellular_automata::CellData;
 use chunk_serde::BinSerializer;
 use noise::{MultiFractal, NoiseFn};
 use phoxels::{
-    core::VoxelMaterial,
-    prelude::{ChunkData, PhoxelGenerator, PhoxelsPlugin},
+    core::{BlockId, VoxelMaterial},
+    prelude::{PhoxelGenerator, PhoxelsPlugin},
 };
 use strum::EnumCount;
 use voxel_chunk::ChunkManager;
 pub use voxel_chunk::{Chunk, ChunkId};
-pub mod cellular_automata;
 
+use crate::voxels::cellular_automata::{BlockProperties, FixedNum};
+pub mod cellular_automata;
+pub type ChunkData = phoxels::prelude::ChunkData<Blocks>;
 mod voxel_chunk;
 
 pub const CHUNK_SIZE: usize = 30;
@@ -23,7 +25,7 @@ pub fn plugin(app: &mut App) {
         .insert_resource(Time::<Fixed>::from_hz(10.))
         .init_resource::<ChunkManager>()
         .add_systems(Startup, spawn_test)
-        .add_plugins(PhoxelsPlugin::<ChunkId>::default())
+        .add_plugins(PhoxelsPlugin::<Blocks, ChunkId>::default())
         .insert_resource(PhoxelGenerator::new(move |id: ChunkId| {
             let noise = noise.clone();
             let mut chunk = ChunkData::new(UVec3::splat(CHUNK_SIZE as u32));
@@ -41,7 +43,6 @@ pub fn plugin(app: &mut App) {
                         let r = ((noise.sample(gx, y + start_y, gz) * 10.) % num_blocks) as u8;
                         let block = Blocks::from_repr(r + 1).unwrap_or_default();
                         chunk.set_block(x as u32, y as u32, z as u32, block);
-                        assert_eq!(chunk.texture(x as u32, y as u32, z as u32), r as u32 + 1);
                     }
                 }
             }
@@ -81,16 +82,16 @@ impl MapNoise {
 }
 
 // set to 16 for final test
-const BX: i32 = 5;
+const BX: i32 = 3;
 // set to 16 for final test
-const BZ: i32 = 5;
+const BZ: i32 = 3;
 // set to 16 for final test
 const BY: i32 = 1;
 
 fn spawn_test(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    generator: Res<PhoxelGenerator<ChunkId>>,
+    generator: Res<PhoxelGenerator<Blocks, ChunkId>>,
 ) {
     let matterial = VoxelMaterial {
         atlas_shape: UVec2::splat(16),
@@ -132,13 +133,33 @@ fn spawn_test(
     strum_macros::EnumCount,
 )]
 #[repr(u8)]
-enum Blocks {
+pub enum Blocks {
     #[default]
-    Air = 0,
+    Void = 0,
     Copper,
     Iron,
     Steel,
     Uranium,
+}
+
+impl Blocks {
+    const fn block_properties(&self) -> BlockProperties {
+        match self {
+            Blocks::Void => BlockProperties::VOID,
+            Blocks::Copper => BlockProperties {
+                ..BlockProperties::DEFAULT
+            },
+            Blocks::Iron => BlockProperties::DEFAULT,
+            Blocks::Steel => BlockProperties::DEFAULT,
+            Blocks::Uranium => BlockProperties::URANIUM,
+        }
+    }
+}
+
+impl From<BlockId> for Blocks {
+    fn from(id: BlockId) -> Self {
+        Blocks::from_repr(id.0).unwrap_or(Blocks::Void)
+    }
 }
 
 impl chunk_serde::Serialize for Blocks {
@@ -150,7 +171,7 @@ impl chunk_serde::Serialize for Blocks {
         #[cfg(debug_assertions)]
         return Ok((Blocks::from_repr(slice[0]).unwrap(), 1));
         #[cfg(not(debug_assertions))]
-        return (Blocks::from_repr(slice[0]).unwrap_or(Blocks::Air), 1);
+        return (Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void), 1);
     }
 }
 

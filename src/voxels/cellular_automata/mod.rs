@@ -5,22 +5,10 @@ mod diagnostics;
 pub type FixedNum = fixed::types::I22F10;
 use super::voxel_chunk::Chunk;
 
+#[derive(Component)]
 pub struct PrevioseStep(Chunk<CellData>);
 
-pub struct Neighbours {
-    data: [Entity; 6],
-}
-
-impl Neighbours {
-    fn up(&self) -> Entity {
-        self[0]
-    }
-    fn 
-}
-
-pub struct Neagbors;
-
-pub use cells::CellData;
+pub use cells::{BlockProperties, CellData};
 pub use diagnostics::{AutomitaDiagnosticChunk, CellMode};
 
 mod cells;
@@ -29,5 +17,7 @@ mod logic;
 use bevy::prelude::*;
 
 pub fn plugin(app: &mut App) {
-    app.add_plugins(diagnostics::plugin);
+    app.add_plugins(diagnostics::plugin)
+        .add_systems(FixedUpdate, logic::step_system)
+        .add_systems(FixedPreUpdate, logic::set_prev);
 }

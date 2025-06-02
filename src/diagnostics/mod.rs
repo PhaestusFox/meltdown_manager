@@ -18,7 +18,7 @@ impl Plugin for MeltdownDiagnosticsPlugin {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
         app.add_plugins((fps::plugin, entity::plugin))
-            .add_plugins(shader::plugin)
+            .add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init);
     }

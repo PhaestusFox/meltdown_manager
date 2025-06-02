@@ -2,10 +2,29 @@
 name = "meltdown-manager"
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0 OR CC0-1.0"
+license = "MIT OR Apache-2.0"
 
 # Compile with Performance Optimizations:
 # https://bevyengine.org/learn/book/getting-started/setup/#compile-with-performance-optimizations
+
+[dependencies]
+bevy = {version = "0.16", features = ["file_watcher"]}
+fixed = "*"
+bevy_editor_pls = {git = "https://github.com/benfrankel/bevy_editor_pls.git", branch = "bevy-0-16"}
+phoxels = {git = "https://github.com/PhaestusFox/phoxels.git", branch = "jam_updates"}
+thiserror = "*"
+strum = "*"
+strum_macros = "*"
+chunk_serde = {path = "crates/chunk_serde"}
+noise = "*"
+
+[dev-dependencies]
+criterion = { version = "0.6", features = ["html_reports"] }
+rand = "*"
+
+[[bench]]
+name = "cellular_automata"
+harness = false
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
@@ -15,8 +34,6 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
-[dependencies]
-game = {path = "crates/game"}
 
 [workspace]
 members = ["crates/*"]

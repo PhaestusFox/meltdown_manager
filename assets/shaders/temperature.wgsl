@@ -26,7 +26,7 @@ const COLOR_MULTIPLIER: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.);
 @group(2) @binding(2) var material_color_sampler: sampler;
 @group(2) @binding(3) var<uniform> face_overrides: array<FaceOverride, 256 / 4>;
 // @group(2) @binding(4) var<uniform> data: array<u32>;
-@group(2) @binding(4) var<storage, read> data: array<FaceOverride>;
+@group(2) @binding(4) var<storage, read> data: array<FaceOverride, 6750>;
 
 struct FaceOverride {
     block_a: u32,
@@ -36,6 +36,9 @@ struct FaceOverride {
 }
 
 const light: vec3<f32> = vec3(-0.57735027, 0.57735027, 0.57735027);
+
+const r30: f32 = 1.0 / 29.0;
+const r255: f32 = 1.0 / 255.0;
 
 @fragment
 fn fragment(
@@ -122,16 +125,67 @@ fn fragment(
     if axis < 0 {
         axis += 1;
     }
-    
-    // if in.block_type == 77 && world_normal.y > 0.5 { // grass
-    //     uvx += 1. / f32(atlas_size.x);
+
+    var fx = in.world_position.x % 30.0;
+    if fx < 0 {
+        fx += 30;
+    }
+    var fy = in.world_position.y % 30.0;
+    if fy < 0 {
+        fy += 30;
+    }
+    var fz = in.world_position.z % 30.0;
+    if fz < 0 {
+        fz += 30;
+    }
+    let ix = u32(fx);
+    let iy = u32(fy);
+    let iz = u32(fz);
+    let aindex = ix + iz * 30 + iy * 30 * 30;
+    let ai = aindex % 4;
+
+    // if ix == 0 {
+    //     let ii = iz + iy * 30;
+    //     let v = data[ii/4].block_a;
+    //     if v < 256 {
+    //         discard;
+    //     }
+    //     return vec4<f32>(0., f32(iy) * r30, f32(iz) * r30, 1.0);
+    // } else {
+    //     discard;
     // }
+
+    let autos = data[aindex / 4];
+    var adata: u32;
     
+    if ai == 0 {
+        adata = autos.block_a;
+    } else if ai == 1 {
+        adata = autos.block_b;
+    } else if ai == 2 {
+        adata = autos.block_c;
+    } else if ai == 3 {
+        adata = autos.block_d;
+    } else {
+        adata = 0;
+    }
     
+
+    let temp = f32(adata & 0xFF) * r255;
+    let presh = f32((adata >> 8) & 0xFF) * r255;
+    let charge = f32( (adata >> 16) & 0xFF) * r255;
+
     uvx += axis * texture_step.x;
     var ts = textureSample(material_color_texture, material_color_sampler, vec2(uvx, uvy));
     let a = ts.a;
     ts *= dp * COLOR_MULTIPLIER;
+    ts = vec4(0., 0., 0., 0.);
+    // ts.r = f32(ix) * chunk_normaliser;
+    // ts.b = f32(iy) * chunk_normaliser;
+    // ts.g = f32(iz) * chunk_normaliser;
+    ts.r = temp;
+    ts.g = presh;
+    ts.b = charge;
     if a < 0.2 {
         discard;
     } else {
@@ -139,6 +193,7 @@ fn fragment(
     };
     // return vec4(1.);
     return ts;
+    // discard;
 }
 
 #import bevy_pbr::{
@@ -149,56 +204,57 @@ fn fragment(
     view_transformations::position_world_to_clip,
 }
 
-// fn affine3_to_square(affine: mat3x4<f32>) -> mat4x4<f32> {
-//     return transpose(mat4x4<f32>(
-//         affine[0],
-//         affine[1],
-//         affine[2],
-//         vec4<f32>(0.0, 0.0, 0.0, 1.0),
-//     ));
-// }
+fn affine3_to_square(affine: mat3x4<f32>) -> mat4x4<f32> {
+    return transpose(mat4x4<f32>(
+        affine[0],
+        affine[1],
+        affine[2],
+        vec4<f32>(0.0, 0.0, 0.0, 1.0),
+    ));
+}
 
-// @vertex
-// fn vertex(vertex: Vertex) -> VertexOutput {
-//     var out: VertexOutput;
-//     let in_world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
+@vertex
+fn vertex(vertex: Vertex) -> VertexOutput {
+    var out: VertexOutput;
+    let in_world_from_local = mesh_functions::get_world_from_local(vertex.instance_index);
 
-//     // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
-//     // See https://github.com/gfx-rs/naga/issues/2416 .
-//     var world_from_local = in_world_from_local;
-//     let x = vertex.position & 31;
-//     let y = (vertex.position >> 5) & 31;
-//     let z = (vertex.position >> 10) & 31;
-//     out.block_type = (vertex.position >> 15) & 131071;
-//     let pos = vec3(f32(x), f32(y), f32(z));
+    // Use vertex_no_morph.instance_index instead of vertex.instance_index to work around a wgpu dx12 bug.
+    // See https://github.com/gfx-rs/naga/issues/2416 .
+    var world_from_local = in_world_from_local;
+    let x = vertex.position & 31;
+    let y = (vertex.position >> 5) & 31;
+    let z = (vertex.position >> 10) & 31;
+    out.block_type = (vertex.position >> 15) & 131071;
+    var pos = vec3(f32(x), f32(y), f32(z));
+    pos += vec3(0.0001);
 
 
-//     // calculate scale
-//     out.scale = vec3<f32>(1.);
-//     // 1. calculate the determinant of the affine matrix
-//     // determinant = dot(z, cross(x, y))
-//     let determinant = determinant(in_world_from_local);
-//     // 2. x = length of the first column of the affine matrix
-//     out.scale.x = 1. / length(in_world_from_local[0]);
-//     // 3. is the determinant negative? if so, negate the x of the scale
-//     if determinant < 0. {
-//         out.scale.x = -out.scale.x;
-//     }
-//     // 4. y = length of the second column of the affine matrix
-//     out.scale.y = 1. / length(in_world_from_local[1]);
-//     // 5. z = length of the third column of the affine matrix
-//     out.scale.z = 1. / length(in_world_from_local[2]);
-//     // let scale = vec3<f32>(det, det, det);
+    // calculate scale
+    out.scale = vec3<f32>(1.);
+    // 1. calculate the determinant of the affine matrix
+    // determinant = dot(z, cross(x, y))
+    let determinant = determinant(in_world_from_local);
+    // 2. x = length of the first column of the affine matrix
+    out.scale.x = 1. / length(in_world_from_local[0]);
+    // 3. is the determinant negative? if so, negate the x of the scale
+    if determinant < 0. {
+        out.scale.x = -out.scale.x;
+    }
+    // 4. y = length of the second column of the affine matrix
+    out.scale.y = 1. / length(in_world_from_local[1]);
+    // 5. z = length of the third column of the affine matrix
+    out.scale.z = 1. / length(in_world_from_local[2]);
+    // let scale = vec3<f32>(det, det, det);
 
-//     /// set pos
-//     out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(pos, 1.0));
-//     out.position = position_world_to_clip(out.world_position.xyz);
-//     /// end set pos
+    /// set pos
+    out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(pos, 1.0));
+    out.position = position_world_to_clip(out.world_position.xyz);
+    /// end set pos
 
-// #ifdef VISIBILITY_RANGE_DITHER
-//     out.visibility_range_dither = mesh_functions::get_visibility_range_dither_level(
-//         vertex.instance_index, mesh_world_from_local[3]);
-// #endif
+#ifdef VISIBILITY_RANGE_DITHER
+    out.visibility_range_dither = mesh_functions::get_visibility_range_dither_level(
+        vertex.instance_index, mesh_world_from_local[3]);
+#endif
 
-//     return out;
-// }
+    return out;
+}

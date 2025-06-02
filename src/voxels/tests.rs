@@ -14,7 +14,7 @@ fn chunk_compression() {
     let solid = Chunk::solid(Blocks::Copper);
 
     // check empty is solid air
-    assert_eq!(CompressedChunkData::Solid(Blocks::Air), empty.compress());
+    assert_eq!(CompressedChunkData::Solid(Blocks::Void), empty.compress());
     // check solid is solid block
     assert_eq!(CompressedChunkData::Solid(Blocks::Copper), solid.compress());
 
@@ -34,7 +34,7 @@ fn chunk_compression() {
     assert_eq!(
         CompressedChunkData::RunLen(vec![
             (Blocks::Copper, 1),
-            (Blocks::Air, (CHUNK_VOL - 1) as u16)
+            (Blocks::Void, (CHUNK_VOL - 1) as u16)
         ]),
         chunk.compress()
     );
@@ -42,7 +42,7 @@ fn chunk_compression() {
     let comp = chunk.compress();
     assert_eq!(Chunk::decompress(&comp), chunk);
 
-    let mut raw = vec![Blocks::Air; CHUNK_VOL];
+    let mut raw = vec![Blocks::Void; CHUNK_VOL];
     // set every other block copper
     for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
         raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
@@ -107,7 +107,7 @@ fn chunk_serde() {
     chunk.set_block(0, 0, 0, Blocks::Copper);
     test!(chunk);
 
-    let mut raw = vec![Blocks::Air; CHUNK_VOL];
+    let mut raw = vec![Blocks::Void; CHUNK_VOL];
     // set every other block copper
     for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
         raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
@@ -308,4 +308,9 @@ fn fuzz_cell_serde() {
         );
         test!(chunk);
     }
+}
+
+#[test]
+fn mod_neg_one() {
+    assert_eq!(-1 % 30, 29);
 }

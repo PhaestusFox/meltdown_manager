@@ -12,6 +12,36 @@ pub struct CellData {
     pub presure: FixedNum,
 }
 
+pub struct BlockProperties {
+    pub heat: FixedNum,
+    pub conductivity: FixedNum,
+    pub density: FixedNum,
+    pub melting_point: FixedNum,
+}
+
+impl BlockProperties {
+    pub const VOID: BlockProperties = BlockProperties {
+        heat: FixedNum::ZERO,
+        conductivity: FixedNum::ZERO,
+        density: FixedNum::ZERO,
+        melting_point: FixedNum::ZERO,
+    };
+
+    pub const DEFAULT: BlockProperties = BlockProperties {
+        heat: FixedNum::lit("0.0"),
+        conductivity: FixedNum::lit("1.00"),
+        density: FixedNum::lit("1.0"),
+        melting_point: FixedNum::lit("1000.0"),
+    };
+
+    pub const URANIUM: BlockProperties = BlockProperties {
+        heat: FixedNum::lit("5.0"),
+        conductivity: FixedNum::lit("1.00"),
+        density: FixedNum::lit("19.1"),
+        melting_point: FixedNum::lit("1132.0"),
+    };
+}
+
 impl chunk_serde::Serialize for CellData {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
         for byte in self.temperature.to_be_bytes() {
@@ -89,11 +119,18 @@ impl Default for CellData {
 }
 
 impl CellData {
+    pub const THE_VOID: CellData = CellData {
+        temperature: FixedNum::ZERO,
+        charge: FixedNum::ZERO,
+        presure: FixedNum::ZERO,
+    };
+
     pub const MIN: CellData = CellData {
         temperature: FixedNum::MIN,
         charge: FixedNum::MIN,
         presure: FixedNum::MIN,
     };
+
     pub const MAX: CellData = CellData {
         temperature: FixedNum::MAX,
         charge: FixedNum::MAX,
@@ -114,6 +151,23 @@ impl CellData {
 
     pub fn any_zero(&self) -> bool {
         self.temperature.is_zero() | self.charge.is_zero() | self.presure.is_zero()
+    }
+
+    pub fn normalize(&self, range: CellData) -> CellData {
+        let mut out = *self;
+        if range.temperature != FixedNum::ZERO {
+            out.temperature /= range.temperature;
+            out.temperature = out.temperature.clamp(FixedNum::ZERO, FixedNum::ONE);
+        }
+        if range.charge != FixedNum::ZERO {
+            out.charge /= range.charge;
+            out.charge = out.charge.clamp(FixedNum::ZERO, FixedNum::ONE);
+        }
+        if range.presure != FixedNum::ZERO {
+            out.presure /= range.presure;
+            out.presure = out.presure.clamp(FixedNum::ZERO, FixedNum::ONE);
+        }
+        out
     }
 }
 
@@ -167,10 +221,10 @@ impl Mul for CellData {
 
 impl<T: fixed::traits::ToFixed> MulAssign<T> for CellData {
     fn mul_assign(&mut self, rhs: T) {
-        let num = FixedNum::from_num(rhs);
-        self.temperature *= num;
-        self.presure *= num;
-        self.charge *= num;
+        let rhs = FixedNum::from_num(rhs);
+        self.temperature *= rhs;
+        self.presure *= rhs;
+        self.charge *= rhs;
     }
 }
 
@@ -179,5 +233,13 @@ impl<T: fixed::traits::ToFixed> Mul<T> for CellData {
     fn mul(mut self, rhs: T) -> Self::Output {
         self *= rhs;
         self
+    }
+}
+
+impl CellData {
+    pub fn clamp(&mut self, min: FixedNum, max: FixedNum) {
+        self.temperature = self.temperature.clamp(min, max);
+        self.charge = self.charge.clamp(min, max);
+        self.presure = self.presure.clamp(min, max);
     }
 }

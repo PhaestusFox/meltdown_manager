@@ -1,7 +1,8 @@
+#![feature(impl_trait_in_assoc_type)]
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 
-mod voxels;
+pub mod voxels;
 
 mod ui;
 

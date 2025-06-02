@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use bevy::{platform::collections::HashMap, prelude::*};
 mod prefab;
 
+use crate::voxels::ChunkData;
 pub use prefab::{ChunkPrefab, ChunkPrefabLoader};
 
 use chunk_serde::CompressedChunkData;
@@ -11,7 +12,7 @@ use super::{Blocks, CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, cellular_automata::CellDa
 
 #[derive(Component, Deref, Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Reflect)]
 #[component(immutable, on_insert = ChunkId::on_insert, on_remove = ChunkId::on_remove)]
-#[require(Transform)]
+#[require(Transform, Neighbours)]
 pub struct ChunkId(IVec3);
 
 impl std::fmt::Display for ChunkId {
@@ -21,6 +22,19 @@ impl std::fmt::Display for ChunkId {
 }
 
 impl ChunkId {
+    pub const ZERO: ChunkId = ChunkId(IVec3::ZERO);
+
+    pub fn neighbour(&self, direction: NeighbourDirection) -> ChunkId {
+        match direction {
+            NeighbourDirection::Up => ChunkId(self.0 + IVec3::Y),
+            NeighbourDirection::Down => ChunkId(self.0 - IVec3::Y),
+            NeighbourDirection::Left => ChunkId(self.0 - IVec3::X),
+            NeighbourDirection::Right => ChunkId(self.0 + IVec3::X),
+            NeighbourDirection::Front => ChunkId(self.0 + IVec3::Z),
+            NeighbourDirection::Back => ChunkId(self.0 - IVec3::Z),
+        }
+    }
+
     pub fn new(x: i32, y: i32, z: i32) -> ChunkId {
         Self(IVec3::new(x, y, z))
     }
@@ -44,10 +58,46 @@ impl ChunkId {
                 .insert(Name::new(format!("{}", id)));
         }
 
-        if let Some(old) = world
-            .resource_mut::<ChunkManager>()
-            .insert_chunk(id, ctx.entity)
-        {
+        let mut neighbours = world
+            .get_mut::<Neighbours>(ctx.entity)
+            .expect("Required Componet");
+        let too_apply = EmptyNeighboursIter::new(&mut neighbours, id).collect::<Vec<_>>();
+
+        let manager = world.resource::<ChunkManager>();
+        let mut can_apply = Vec::with_capacity(too_apply.len());
+        let mut recip = Vec::with_capacity(6);
+        for (apply, direction) in too_apply {
+            if let Some(other) = manager.get_chunk(&id.neighbour(direction)) {
+                can_apply.push((apply, other));
+                recip.push((other, direction.rev()));
+            }
+        }
+
+        let mut neighbours = world
+            .get_mut::<Neighbours>(ctx.entity)
+            .expect("Required Componet");
+        for (apply, other) in can_apply {
+            apply(&mut neighbours, other);
+        }
+
+        for (other, direction) in recip {
+            if let Some(mut neighbours) = world.get_mut::<Neighbours>(other) {
+                match direction {
+                    NeighbourDirection::Up => neighbours.down = Some(ctx.entity),
+                    NeighbourDirection::Down => neighbours.up = Some(ctx.entity),
+                    NeighbourDirection::Left => neighbours.right = Some(ctx.entity),
+                    NeighbourDirection::Right => neighbours.left = Some(ctx.entity),
+                    NeighbourDirection::Front => neighbours.back = Some(ctx.entity),
+                    NeighbourDirection::Back => neighbours.front = Some(ctx.entity),
+                }
+            } else {
+                warn!("Failed to get Neighbours for {other:?} this is probably a bug");
+            }
+        }
+
+        let mut manager = world.resource_mut::<ChunkManager>();
+
+        if let Some(old) = manager.insert_chunk(id, ctx.entity) {
             if old != ctx.entity {
                 warn!(
                     "already used ChunkId({}) on {}: this is probably unitentonal despawing old entity",
@@ -104,14 +154,17 @@ impl ChunkManager {
     fn save_chunk(
         &self,
         chunk: ChunkId,
-        data: &Query<(&Chunk<Blocks>, &Chunk<CellData>)>,
+        data: &Query<(&ChunkData, &Chunk<CellData>)>,
         path: &'static str,
     ) -> Result<(), ChunkManagerError> {
         let entity = self
             .get_chunk(&chunk)
             .ok_or(ChunkManagerError::NoEntity(chunk))?;
         let (blocks, automata) = data.get(entity)?;
+        let blocks = Chunk::<Blocks>::from(blocks);
         let blocks = blocks.compress();
+        let automata = automata.compress();
+        todo!();
         Ok(())
     }
 }
@@ -158,9 +211,14 @@ impl<T> Chunk<T> {
             && z >= 0
     }
 
+    #[inline(always)]
     pub fn set_by_index(&mut self, index: usize, to: T) {
         debug_assert!(index < CHUNK_VOL);
         self.blocks[index] = to;
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.blocks.iter_mut()
     }
 }
 
@@ -209,6 +267,11 @@ impl<T: Copy> Chunk<T> {
     pub fn get_by_index(&self, index: usize) -> T {
         debug_assert!(index < CHUNK_VOL);
         self.blocks[index]
+    }
+
+    pub fn get_by_index_mut(&mut self, index: usize) -> &mut T {
+        debug_assert!(index < CHUNK_VOL);
+        &mut self.blocks[index]
     }
 }
 
@@ -314,5 +377,180 @@ impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         let (x, y, z) = self.0.next()?;
         Some(self.1.blocks[Chunk::<T>::index(x, y, z)])
+    }
+}
+
+#[derive(Component, Default)]
+pub struct Neighbours {
+    up: Option<Entity>,
+    down: Option<Entity>,
+    left: Option<Entity>,
+    right: Option<Entity>,
+    front: Option<Entity>,
+    back: Option<Entity>,
+}
+
+struct EmptyNeighboursIter<'a> {
+    neighbours: &'a mut Neighbours,
+    index: usize,
+}
+
+pub struct NeighboursIter<'a> {
+    neighbours: &'a Neighbours,
+    index: usize,
+}
+
+impl Iterator for NeighboursIter<'_> {
+    type Item = (usize, Entity);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < 6 {
+            let idx = self.index;
+            self.index += 1;
+            let out = match idx {
+                0 => self.neighbours.up(),
+                1 => self.neighbours.down(),
+                2 => self.neighbours.left(),
+                3 => self.neighbours.right(),
+                4 => self.neighbours.front(),
+                5 => self.neighbours.back(),
+                _ => None,
+            };
+            if let Some(out) = out {
+                return Some((idx, out));
+            }
+        }
+        None
+    }
+}
+
+impl<'a> EmptyNeighboursIter<'a> {
+    fn new(neighbours: &'a mut Neighbours, id: ChunkId) -> Self {
+        Self {
+            neighbours,
+            index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for EmptyNeighboursIter<'a> {
+    type Item = (fn(&mut Neighbours, Entity), NeighbourDirection);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= 6 {
+            return None;
+        }
+        let idx = self.index;
+        let entry = match idx {
+            0 => self.neighbours.up.is_none(),
+            1 => self.neighbours.down.is_none(),
+            2 => self.neighbours.left.is_none(),
+            3 => self.neighbours.right.is_none(),
+            4 => self.neighbours.front.is_none(),
+            5 => self.neighbours.back.is_none(),
+            _ => unreachable!(),
+        };
+        self.index += 1;
+        if entry {
+            let f: fn(&mut Neighbours, Entity) = match idx {
+                0 => |n, e| n.up = Some(e),
+                1 => |n, e| n.down = Some(e),
+                2 => |n, e| n.left = Some(e),
+                3 => |n, e| n.right = Some(e),
+                4 => |n, e| n.front = Some(e),
+                5 => |n, e| n.back = Some(e),
+                _ => unreachable!(),
+            };
+            let id = NeighbourDirection::from_index(idx);
+            Some((f, id))
+        } else {
+            self.next()
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum NeighbourDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+    Front,
+    Back,
+}
+
+impl NeighbourDirection {
+    fn from_index(index: usize) -> Self {
+        match index {
+            0 => Self::Up,
+            1 => Self::Down,
+            2 => Self::Left,
+            3 => Self::Right,
+            4 => Self::Front,
+            5 => Self::Back,
+            _ => {
+                #[cfg(debug_assertions)]
+                unreachable!(); // this should never happen, but if it does, panic in debug mode
+                #[allow(unreachable_code)]
+                Self::Up // default to up if in release mode
+            }
+        }
+    }
+
+    fn rev(&self) -> Self {
+        match self {
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Front => Self::Back,
+            Self::Back => Self::Front,
+        }
+    }
+}
+
+impl Neighbours {
+    fn up(&self) -> Option<Entity> {
+        self.up
+    }
+    fn down(&self) -> Option<Entity> {
+        self.down
+    }
+    fn left(&self) -> Option<Entity> {
+        self.left
+    }
+    fn right(&self) -> Option<Entity> {
+        self.right
+    }
+    fn front(&self) -> Option<Entity> {
+        self.front
+    }
+    fn back(&self) -> Option<Entity> {
+        self.back
+    }
+
+    pub fn iter(&self) -> NeighboursIter {
+        NeighboursIter {
+            neighbours: self,
+            index: 0,
+        }
+    }
+}
+
+impl From<&ChunkData> for Chunk<Blocks> {
+    fn from(data: &ChunkData) -> Self {
+        let mut blocks = Vec::with_capacity(CHUNK_VOL);
+        for i in 0..CHUNK_SIZE as u32 {
+            for j in 0..CHUNK_SIZE as u32 {
+                for k in 0..CHUNK_SIZE as u32 {
+                    let block = data
+                        .get_block(i, j, k)
+                        .expect("Block should be in bounds")
+                        .into();
+                    blocks.push(block);
+                }
+            }
+        }
+        Chunk { blocks }
     }
 }
