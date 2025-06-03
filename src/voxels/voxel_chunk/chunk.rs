@@ -25,8 +25,8 @@ impl ChunkId {
         match direction {
             NeighbourDirection::Up => ChunkId(self.0 + IVec3::Y),
             NeighbourDirection::Down => ChunkId(self.0 - IVec3::Y),
-            NeighbourDirection::Left => ChunkId(self.0 - IVec3::X),
-            NeighbourDirection::Right => ChunkId(self.0 + IVec3::X),
+            NeighbourDirection::Left => ChunkId(self.0 + IVec3::X),
+            NeighbourDirection::Right => ChunkId(self.0 - IVec3::X),
             NeighbourDirection::Front => ChunkId(self.0 + IVec3::Z),
             NeighbourDirection::Back => ChunkId(self.0 - IVec3::Z),
         }
@@ -58,11 +58,11 @@ impl ChunkId {
         let mut neighbours = world
             .get_mut::<Neighbours>(ctx.entity)
             .expect("Required Componet");
-        let too_apply = EmptyNeighboursIter::new(&mut neighbours, id).collect::<Vec<_>>();
+        let too_apply = EmptyNeighboursIter::new(&mut neighbours).collect::<Vec<_>>();
 
         let manager = world.resource::<ChunkManager>();
         let mut can_apply = Vec::with_capacity(too_apply.len());
-        let mut recip = Vec::with_capacity(6);
+        let mut recip = Vec::with_capacity(too_apply.len());
         for (apply, direction) in too_apply {
             if let Some(other) = manager.get_chunk(&id.neighbour(direction)) {
                 can_apply.push((apply, other));
@@ -80,12 +80,12 @@ impl ChunkId {
         for (other, direction) in recip {
             if let Some(mut neighbours) = world.get_mut::<Neighbours>(other) {
                 match direction {
-                    NeighbourDirection::Up => neighbours.down = Some(ctx.entity),
-                    NeighbourDirection::Down => neighbours.up = Some(ctx.entity),
-                    NeighbourDirection::Left => neighbours.right = Some(ctx.entity),
-                    NeighbourDirection::Right => neighbours.left = Some(ctx.entity),
-                    NeighbourDirection::Front => neighbours.back = Some(ctx.entity),
-                    NeighbourDirection::Back => neighbours.front = Some(ctx.entity),
+                    NeighbourDirection::Up => neighbours.up = Some(ctx.entity),
+                    NeighbourDirection::Down => neighbours.down = Some(ctx.entity),
+                    NeighbourDirection::Left => neighbours.left = Some(ctx.entity),
+                    NeighbourDirection::Right => neighbours.right = Some(ctx.entity),
+                    NeighbourDirection::Front => neighbours.front = Some(ctx.entity),
+                    NeighbourDirection::Back => neighbours.back = Some(ctx.entity),
                 }
             } else {
                 warn!("Failed to get Neighbours for {other:?} this is probably a bug");
@@ -377,7 +377,7 @@ impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 pub struct Neighbours {
     up: Option<Entity>,
     down: Option<Entity>,
@@ -398,7 +398,7 @@ pub struct NeighboursIter<'a> {
 }
 
 impl Iterator for NeighboursIter<'_> {
-    type Item = (usize, Entity);
+    type Item = (NeighbourDirection, Entity);
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < 6 {
@@ -414,7 +414,7 @@ impl Iterator for NeighboursIter<'_> {
                 _ => None,
             };
             if let Some(out) = out {
-                return Some((idx, out));
+                return Some((NeighbourDirection::from_index(idx), out));
             }
         }
         None
@@ -422,7 +422,7 @@ impl Iterator for NeighboursIter<'_> {
 }
 
 impl<'a> EmptyNeighboursIter<'a> {
-    fn new(neighbours: &'a mut Neighbours, id: ChunkId) -> Self {
+    fn new(neighbours: &'a mut Neighbours) -> Self {
         Self {
             neighbours,
             index: 0,
@@ -466,7 +466,7 @@ impl<'a> Iterator for EmptyNeighboursIter<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum NeighbourDirection {
     Up,
     Down,
@@ -494,7 +494,7 @@ impl NeighbourDirection {
         }
     }
 
-    fn rev(&self) -> Self {
+    pub fn rev(&self) -> Self {
         match self {
             Self::Up => Self::Down,
             Self::Down => Self::Up,
@@ -507,22 +507,22 @@ impl NeighbourDirection {
 }
 
 impl Neighbours {
-    fn up(&self) -> Option<Entity> {
+    pub fn up(&self) -> Option<Entity> {
         self.up
     }
-    fn down(&self) -> Option<Entity> {
+    pub fn down(&self) -> Option<Entity> {
         self.down
     }
-    fn left(&self) -> Option<Entity> {
+    pub fn left(&self) -> Option<Entity> {
         self.left
     }
-    fn right(&self) -> Option<Entity> {
+    pub fn right(&self) -> Option<Entity> {
         self.right
     }
-    fn front(&self) -> Option<Entity> {
+    pub fn front(&self) -> Option<Entity> {
         self.front
     }
-    fn back(&self) -> Option<Entity> {
+    pub fn back(&self) -> Option<Entity> {
         self.back
     }
 

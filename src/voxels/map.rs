@@ -2,7 +2,6 @@ use bevy::{
     app::{App, Startup},
     asset::AssetApp,
     math::UVec3,
-    time::{Fixed, Time},
 };
 use noise::{MultiFractal, NoiseFn};
 use phoxels::{PhoxelsPlugin, core::PhoxelGenerator};
@@ -11,7 +10,6 @@ use strum::EnumCount;
 use crate::voxels::{
     Blocks, cellular_automata, spawn_test,
     voxel_chunk::{
-        self,
         chunk::{ChunkId, ChunkManager},
         prefab::ChunkPrefabLoader,
     },
@@ -26,7 +24,6 @@ pub const CHUNK_VOL: usize = CHUNK_ARIA * CHUNK_SIZE;
 pub fn map_plugin(app: &mut App) {
     let noise = MapNoise::new();
     app.init_asset_loader::<ChunkPrefabLoader>()
-        .insert_resource(Time::<Fixed>::from_hz(10.))
         .init_resource::<ChunkManager>()
         .add_systems(Startup, spawn_test)
         .add_plugins(PhoxelsPlugin::<Blocks, ChunkId>::default())

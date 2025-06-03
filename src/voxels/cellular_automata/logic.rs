@@ -230,10 +230,13 @@ pub fn step_system(
             let Ok(center_pre) = start_state.get(center) else {
                 return;
             };
+            // if neighbours.iter().count() != 6 {
+            //     println!("Invalid neighbours count: {center}:{:?}", neighbours);
+            // }
             let mut chunks = [Some(&center_pre.0), None, None, None, None, None, None];
             for (i, n) in neighbours.iter() {
                 if let Ok(neighbour) = start_state.get(n) {
-                    chunks[i + 1] = Some(&neighbour.0);
+                    chunks[i as usize + 1] = Some(&neighbour.0);
                 }
             }
 
@@ -241,7 +244,7 @@ pub fn step_system(
                 ChunkIter::new(chunk.as_mut(), blocks),
                 ChunkGared::new(chunks),
             );
-            max.send(out);
+            let _ = max.send(out);
         },
     );
 }

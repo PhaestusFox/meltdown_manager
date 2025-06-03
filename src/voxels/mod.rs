@@ -8,7 +8,7 @@ use blocks::Blocks;
 use cellular_automata::CellData;
 use map::CHUNK_VOL;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
-use voxel_chunk::chunk::{Chunk, ChunkId};
+pub use voxel_chunk::chunk::{Chunk, ChunkId, NeighbourDirection, Neighbours};
 
 // set to 16 for final test
 const BX: i32 = 3;

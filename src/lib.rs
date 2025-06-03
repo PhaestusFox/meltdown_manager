@@ -33,6 +33,8 @@ pub fn run_game() {
     });
 
     let mut app = App::new();
+
+    app.insert_resource(Time::<Fixed>::from_hz(10.));
     app
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)

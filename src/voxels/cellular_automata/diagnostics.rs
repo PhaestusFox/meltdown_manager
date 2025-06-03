@@ -66,7 +66,6 @@ impl MaxValue {
             if let Ok(data) = self.channel.try_recv() {
                 self.max.max(&data);
             } else {
-                println!("Max diagnostics: {:?}", self.max);
                 break;
             }
         }

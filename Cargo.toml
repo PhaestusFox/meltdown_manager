@@ -20,7 +20,7 @@ noise = "*"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
-rand = "*"
+rand = "0.9.1"
 
 [[bench]]
 name = "cellular_automata"

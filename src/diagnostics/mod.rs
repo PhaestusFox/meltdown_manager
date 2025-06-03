@@ -7,6 +7,7 @@ use bevy::{
     },
     prelude::*,
 };
+mod chunk;
 mod entity;
 mod fps;
 pub mod shader;
@@ -17,10 +18,11 @@ impl Plugin for MeltdownDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
-        app.add_plugins((fps::plugin, entity::plugin))
+        app.add_plugins((fps::plugin, entity::plugin, chunk::plugin))
             .add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
             .add_systems(Update, (toggle_window, on_click_tap))
-            .add_systems(PostStartup, on_init);
+            .add_systems(PostStartup, on_init)
+            .add_systems(Update, tab_button_system);
     }
 }
 
@@ -42,7 +44,7 @@ impl DiagnosticSettings {
         on_close: SystemId<In<Entity>>,
     ) {
         let name = name.into();
-        info!("Registuring Diagnostic Tap {}", name);
+        info!("Registuring Diagnostic Tab {}", name);
         self.registured_tabs.push(DiagnosticTab {
             name,
             on_open,
@@ -147,6 +149,8 @@ fn on_init(mut commands: Commands, settings: Res<DiagnosticSettings>) {
                 width: Val::Percent(95.),
                 height: Val::Percent(80.),
                 margin: UiRect::all(Val::Auto),
+                flex_direction: FlexDirection::Column,
+                flex_wrap: FlexWrap::Wrap,
                 ..Default::default()
             },
             Name::new("Content"),
@@ -223,5 +227,21 @@ fn toggle_window(
         commands.run_system(window.on_enable);
     } else {
         commands.run_system(window.on_disable);
+    }
+}
+
+#[derive(Component)]
+#[require(Button)]
+struct TabButton(SystemId);
+
+fn tab_button_system(
+    buttons: Query<(&Interaction, &TabButton), Changed<Interaction>>,
+    mut commands: Commands,
+) {
+    for (interaction, TabButton(system_id)) in &buttons {
+        if let Interaction::Pressed = *interaction {
+            info!("Running System: {:?}", system_id);
+            commands.run_system(*system_id);
+        }
     }
 }
