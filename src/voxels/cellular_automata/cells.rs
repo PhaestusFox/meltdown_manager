@@ -1,4 +1,4 @@
-use std::ops::{Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 use super::FixedNum;
 use super::*;
@@ -31,14 +31,14 @@ impl BlockProperties {
         heat: FixedNum::lit("0.0"),
         conductivity: FixedNum::lit("1.00"),
         density: FixedNum::lit("1.0"),
-        melting_point: FixedNum::lit("1000.0"),
+        melting_point: FixedNum::lit("500.0"),
     };
 
     pub const URANIUM: BlockProperties = BlockProperties {
         heat: FixedNum::lit("5.0"),
         conductivity: FixedNum::lit("1.00"),
         density: FixedNum::lit("19.1"),
-        melting_point: FixedNum::lit("1132.0"),
+        melting_point: FixedNum::lit("500.0"),
     };
 }
 
@@ -59,9 +59,9 @@ impl chunk_serde::Serialize for CellData {
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         Ok((
             CellData {
-                temperature: FixedNum::from_be_bytes([slice[0], slice[1], slice[2], slice[3]]),
-                charge: FixedNum::from_be_bytes([slice[4], slice[5], slice[6], slice[7]]),
-                presure: FixedNum::from_be_bytes([slice[8], slice[9], slice[10], slice[11]]),
+                temperature: FixedNum::from_be_bytes(slice[0..4].try_into().unwrap()),
+                charge: FixedNum::from_be_bytes(slice[4..8].try_into().unwrap()),
+                presure: FixedNum::from_be_bytes(slice[8..12].try_into().unwrap()),
             },
             12,
         ))
@@ -135,6 +135,12 @@ impl CellData {
         temperature: FixedNum::MAX,
         charge: FixedNum::MAX,
         presure: FixedNum::MAX,
+    };
+
+    pub const ZERO: CellData = CellData {
+        temperature: FixedNum::ZERO,
+        charge: FixedNum::ZERO,
+        presure: FixedNum::ZERO,
     };
 
     pub fn min(&mut self, other: &Self) {
@@ -241,5 +247,38 @@ impl CellData {
         self.temperature = self.temperature.clamp(min, max);
         self.charge = self.charge.clamp(min, max);
         self.presure = self.presure.clamp(min, max);
+    }
+}
+
+impl AddAssign for CellData {
+    fn add_assign(&mut self, rhs: Self) {
+        self.temperature += rhs.temperature;
+        self.presure += rhs.presure;
+        self.charge += rhs.charge;
+    }
+}
+
+impl Add for CellData {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl<T: fixed::traits::ToFixed> DivAssign<T> for CellData {
+    fn div_assign(&mut self, rhs: T) {
+        let rhs = FixedNum::from_num(rhs);
+        self.temperature /= rhs;
+        self.presure /= rhs;
+        self.charge /= rhs;
+    }
+}
+
+impl<T: fixed::traits::ToFixed> Div<T> for CellData {
+    type Output = Self;
+    fn div(mut self, rhs: T) -> Self::Output {
+        self /= rhs;
+        self
     }
 }

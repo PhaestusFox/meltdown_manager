@@ -54,7 +54,7 @@ impl chunk_serde::Serialize for Blocks {
         #[cfg(debug_assertions)]
         return Ok((Blocks::from_repr(slice[0]).unwrap(), 1));
         #[cfg(not(debug_assertions))]
-        return (Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void), 1);
+        return Ok((Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void), 1));
     }
 }
 

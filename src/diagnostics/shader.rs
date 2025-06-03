@@ -36,6 +36,8 @@ pub struct DebugMaterial {
     pub overrides: [phoxels::prelude::BlockOverrides; 256 / 4],
     #[storage(4, read_only)]
     pub data: Handle<ShaderStorageBuffer>,
+    #[uniform(5)]
+    pub settings: u32,
 }
 
 // impl DebugMaterial {

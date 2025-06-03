@@ -27,6 +27,7 @@ const COLOR_MULTIPLIER: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.);
 @group(2) @binding(3) var<uniform> face_overrides: array<FaceOverride, 256 / 4>;
 // @group(2) @binding(4) var<uniform> data: array<u32>;
 @group(2) @binding(4) var<storage, read> data: array<FaceOverride, 6750>;
+@group(2) @binding(5) var<uniform> flags: u32;
 
 struct FaceOverride {
     block_a: u32,
@@ -180,12 +181,15 @@ fn fragment(
     let a = ts.a;
     ts *= dp * COLOR_MULTIPLIER;
     ts = vec4(0., 0., 0., 0.);
-    // ts.r = f32(ix) * chunk_normaliser;
-    // ts.b = f32(iy) * chunk_normaliser;
-    // ts.g = f32(iz) * chunk_normaliser;
-    ts.r = temp;
-    ts.g = presh;
-    ts.b = charge;
+    if (flags & 1) > 0{
+        ts.r = temp;
+    }
+    if (flags & 2)> 0{
+        ts.g = presh;
+    }
+    if (flags & 4) > 0{
+        ts.b = charge;
+    }
     if a < 0.2 {
         discard;
     } else {

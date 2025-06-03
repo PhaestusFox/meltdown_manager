@@ -17,6 +17,7 @@ strum = "*"
 strum_macros = "*"
 chunk_serde = {path = "crates/chunk_serde"}
 noise = "*"
+bitflags = "*"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }

@@ -63,7 +63,7 @@ pub fn set_prev(
 pub fn force_finish(state: Res<BatchingStrategy>, chunks: Query<&mut NextStep>) {}
 
 pub fn step_system(
-    max: NonSend<super::diagnostics::MaxValue>,
+    max: NonSend<crate::diagnostics::MaxValue>,
     start_state: Query<&Cells>,
     mut new_state: Query<(Entity, &mut NextStep, &Neighbours, &ChunkData)>,
 ) {

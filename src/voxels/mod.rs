@@ -11,9 +11,9 @@ use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
 pub use voxel_chunk::chunk::{Chunk, ChunkId, NeighbourDirection, Neighbours};
 
 // set to 16 for final test
-const BX: i32 = 3;
+const BX: i32 = 5;
 // set to 16 for final test
-const BZ: i32 = 3;
+const BZ: i32 = 5;
 // set to 16 for final test
 const BY: i32 = 1;
 

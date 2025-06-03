@@ -1,4 +1,4 @@
-use bevy::{math::IVec3, platform::collections::HashMap, prelude::*};
+use bevy::{diagnostic::DiagnosticsStore, math::IVec3, platform::collections::HashMap, prelude::*};
 use chunk_serde::CompressedChunkData;
 
 use crate::voxels::{
@@ -8,7 +8,7 @@ use crate::voxels::{
 };
 
 #[derive(Component, Deref, Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Reflect)]
-#[component(immutable, on_insert = ChunkId::on_insert, on_remove = ChunkId::on_remove)]
+#[component(immutable, on_insert = ChunkId::on_insert, on_remove = ChunkId::on_remove, on_add = ChunkId::on_add, on_despawn = ChunkId::on_despawn)]
 #[require(Transform, Neighbours)]
 pub struct ChunkId(IVec3);
 
@@ -34,6 +34,17 @@ impl ChunkId {
 
     pub fn new(x: i32, y: i32, z: i32) -> ChunkId {
         Self(IVec3::new(x, y, z))
+    }
+
+    fn on_add(mut world: bevy::ecs::world::DeferredWorld, _ctx: bevy::ecs::component::HookContext) {
+        world.resource_mut::<crate::diagnostics::ChunkCount>().inc();
+    }
+
+    fn on_despawn(
+        mut world: bevy::ecs::world::DeferredWorld,
+        _ctx: bevy::ecs::component::HookContext,
+    ) {
+        world.resource_mut::<crate::diagnostics::ChunkCount>().dec();
     }
 
     fn on_insert(

@@ -13,14 +13,14 @@ use super::*;
 pub fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>) -> CellData {
     let mut max = CellData::MIN;
     for (id, data, block) in chunk {
-        let mut sum = FixedNum::ZERO;
+        let mut sum = CellData::ZERO;
         for neighbour_id in id.neighbours() {
             let neighbour_data = neighbours.get(neighbour_id);
-            sum += neighbour_data.temperature;
+            sum += neighbour_data;
         }
         sum /= SUM_DIVISOR;
-        sum += block.block_properties().heat;
-        data.temperature = sum;
+        sum.temperature += block.block_properties().heat;
+        *data = sum;
         data.presure = FixedNum::ZERO; // Placeholder for pressure logic
         data.charge = FixedNum::ZERO; // Placeholder for charge logic
         max.max(data);

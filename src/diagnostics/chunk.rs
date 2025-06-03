@@ -1,5 +1,8 @@
 use bevy::{
-    diagnostic::{Diagnostic, DiagnosticPath, DiagnosticsStore, RegisterDiagnostic},
+    diagnostic::{
+        Diagnostic, DiagnosticMeasurement, DiagnosticPath, Diagnostics, DiagnosticsStore,
+        RegisterDiagnostic,
+    },
     ecs::system::SystemId,
     prelude::*,
 };
@@ -11,6 +14,23 @@ use crate::{
 
 const CHUNK_COUNT: DiagnosticPath = DiagnosticPath::const_new("Chunk count");
 
+#[derive(Resource, Default)]
+pub struct ChunkCount(usize);
+
+impl ChunkCount {
+    pub fn inc(&mut self) {
+        self.0 += 1;
+    }
+
+    pub fn dec(&mut self) {
+        if self.0 > 0 {
+            self.0 -= 1;
+        } else {
+            error!("Attempting to decrement chunk count below zero");
+        }
+    }
+}
+
 pub fn plugin(app: &mut App) {
     app.add_systems(Startup, reg_tab)
         .register_diagnostic(
@@ -19,7 +39,8 @@ pub fn plugin(app: &mut App) {
                 .with_smoothing_factor(0.),
         )
         .add_systems(Update, (mark_unknown, update_count, update_text))
-        .init_resource::<TabState>();
+        .init_resource::<TabState>()
+        .init_resource::<ChunkCount>();
 }
 
 fn reg_tab(mut settings: ResMut<DiagnosticSettings>, mut commands: Commands) {
@@ -82,21 +103,20 @@ fn on_close(content: In<Entity>, mut commands: Commands) {
     commands.entity(*content).despawn_related::<Children>();
 }
 
-fn update_count(mut text: Query<&mut Text, With<CountText>>, diagnostics: Res<DiagnosticsStore>) {
+fn update_count(
+    mut text: Query<&mut Text, With<CountText>>,
+    mut diagnostics: Diagnostics,
+    count: Res<ChunkCount>,
+) {
     let Ok(mut text) = text.single_mut() else {
         return;
     };
-    let Some(frame_time) = diagnostics.get(&CHUNK_COUNT) else {
-        error!("Chunk count not in DiagnosticsStore");
+    if !count.is_changed() {
         return;
-    };
-    if let Some(avr) = frame_time.value() {
-        text.0 = format!("Count: {:00}", avr);
-    } else {
-        text.0 = String::from("Count: N/A");
     }
+    diagnostics.add_measurement(&CHUNK_COUNT, || count.0 as f64);
+    text.0 = format!("Count: {}", count.0);
 }
-
 fn update_text(mut text: Query<&mut Text, With<ValadatreText>>, state: Res<TabState>) {
     let Ok(mut text) = text.single_mut() else {
         return;

@@ -7,18 +7,21 @@ use bevy::{
     },
     prelude::*,
 };
+mod automata;
 mod chunk;
 mod entity;
 mod fps;
 pub mod shader;
 
+pub use automata::MaxValue;
+pub use chunk::ChunkCount;
 pub struct MeltdownDiagnosticsPlugin;
 
 impl Plugin for MeltdownDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
-        app.add_plugins((fps::plugin, entity::plugin, chunk::plugin))
+        app.add_plugins((fps::plugin, entity::plugin, chunk::plugin, automata::plugin))
             .add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init)
@@ -33,7 +36,6 @@ pub struct DiagnosticSettings {
     pub registured_tabs: Vec<DiagnosticTab>,
     pub tab_style: Node,
     pub tab_color: (Color, Color),
-    pub cell_mode: crate::voxels::cellular_automata::CellMode,
 }
 
 impl DiagnosticSettings {
@@ -67,7 +69,6 @@ impl Default for DiagnosticSettings {
                 Color::linear_rgb(0.4, 0.4, 0.4),
                 Color::linear_rgb(0.3, 0.3, 0.3),
             ),
-            cell_mode: crate::voxels::cellular_automata::CellMode::All,
         }
     }
 }
@@ -233,6 +234,12 @@ fn toggle_window(
 #[derive(Component)]
 #[require(Button)]
 struct TabButton(SystemId);
+
+impl TabButton {
+    pub fn new(system_id: SystemId) -> Self {
+        TabButton(system_id)
+    }
+}
 
 fn tab_button_system(
     buttons: Query<(&Interaction, &TabButton), Changed<Interaction>>,
