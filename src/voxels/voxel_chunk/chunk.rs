@@ -179,6 +179,17 @@ pub struct Chunk<T> {
     blocks: Vec<T>,
 }
 
+impl<T> Clone for Chunk<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            blocks: self.blocks.clone(),
+        }
+    }
+}
+
 impl<T: PartialEq + Eq> Eq for Chunk<T> {}
 
 impl<T: PartialEq> PartialEq for Chunk<T> {
