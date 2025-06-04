@@ -45,40 +45,39 @@ const r255: f32 = 1.0 / 255.0;
 fn fragment(
     in: VertexOutput,
 ) -> @location(0) vec4<f32> {
-    let world_normal = normalize( cross( dpdy( in.world_position.xyz ), dpdx( in.world_position.xyz ) ) );
     
     var dp = 0.7;
 
-    if world_normal.y > 0.2 {
+    if in.world_normal.y > 0.2 {
         dp = 1.;
-    } else if world_normal.y < -0.2 {
+    } else if in.world_normal.y < -0.2 {
         dp = 0.5;
     } else {
-        if world_normal.x > 0.2 {
+        if in.world_normal.x > 0.2 {
             dp += 0.05;   
-        } else if world_normal.x < -0.2 {
+        } else if in.world_normal.x < -0.2 {
             dp -= 0.1;
         }
-        if world_normal.z > 0.2 {
+        if in.world_normal.z > 0.2 {
             dp += 0.1;
-        } else if world_normal.z < -0.2 {
+        } else if in.world_normal.z < -0.2 {
             dp -= 0.05;
         }
     }
 
     // back, left, right, top, bottom
     var face: u32 = 10;
-    if world_normal.x > 0.5 {
+    if in.world_normal.x > 0.5 {
         face = 15;
-    } else if world_normal.x < -0.5 {
+    } else if in.world_normal.x < -0.5 {
         face = 10;
-    } else if world_normal.y > 0.5 {
+    } else if in.world_normal.y > 0.5 {
         face = 5;
-    } else if world_normal.y < -0.5 {
+    } else if in.world_normal.y < -0.5 {
         face = 0;
-    } else if world_normal.z > 0.5 {
+    } else if in.world_normal.z > 0.5 {
         face = 20;
-    } else if world_normal.z < -0.5 {
+    } else if in.world_normal.z < -0.5 {
         face = 25;
     };
 
@@ -108,7 +107,7 @@ fn fragment(
 
     
     var axis: f32;
-    if abs(world_normal.y) < 0.5 {
+    if abs(in.world_normal.y) < 0.5 {
         axis = (in.world_position.y * in.scale.y) % 1;
     } else {
         axis = (in.world_position.z * in.scale.z) % 1;
@@ -118,7 +117,7 @@ fn fragment(
     }
     uvy -= (axis * texture_step.y);
     
-    if abs(world_normal.x) < 0.5 {
+    if abs(in.world_normal.x) < 0.5 {
         axis = (in.world_position.x * in.scale.x) % 1;
     } else {
         axis = (in.world_position.z * in.scale.z) % 1;
@@ -175,21 +174,34 @@ fn fragment(
     let temp = f32(adata & 0xFF) * r255;
     let presh = f32((adata >> 8) & 0xFF) * r255;
     let charge = f32( (adata >> 16) & 0xFF) * r255;
+    let phase = (adata >> 24) & 0xFF;
 
     uvx += axis * texture_step.x;
     var ts = textureSample(material_color_texture, material_color_sampler, vec2(uvx, uvy));
     let a = ts.a;
+    ts = vec4(0);
+    if (flags & (1<<9)) > 0 {
+        if phase == 0 {
+            ts.b = 1.;
+        }
+        if (phase & 1) > 0 {
+            ts.g = 1.;
+        }
+        if (phase & 2) > 0 {
+            ts.r = 1.;
+        }
+    } else {
+        if (flags & 1) > 0{
+            ts.r = temp;
+        }
+        if (flags & 2)> 0{
+            ts.g = presh;
+        }
+        if (flags & 4) > 0{
+            ts.b = charge;
+        }
+    }
     ts *= dp * COLOR_MULTIPLIER;
-    ts = vec4(0., 0., 0., 0.);
-    if (flags & 1) > 0{
-        ts.r = temp;
-    }
-    if (flags & 2)> 0{
-        ts.g = presh;
-    }
-    if (flags & 4) > 0{
-        ts.b = charge;
-    }
     if a < 0.2 {
         discard;
     } else {
@@ -231,6 +243,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.block_type = (vertex.position >> 15) & 131071;
     var pos = vec3(f32(x), f32(y), f32(z));
     pos += vec3(0.0001);
+    pos.y -= 0.0002;
 
 
     // calculate scale
@@ -250,15 +263,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.scale.z = 1. / length(in_world_from_local[2]);
     // let scale = vec3<f32>(det, det, det);
 
+
     /// set pos
     out.world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(pos, 1.0));
     out.position = position_world_to_clip(out.world_position.xyz);
     /// end set pos
-
-#ifdef VISIBILITY_RANGE_DITHER
-    out.visibility_range_dither = mesh_functions::get_visibility_range_dither_level(
-        vertex.instance_index, mesh_world_from_local[3]);
-#endif
 
     return out;
 }

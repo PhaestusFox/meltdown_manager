@@ -27,7 +27,7 @@ impl Plugin for VoxelShaderPlugin {
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct DebugMaterial {
     #[uniform(0)]
-    pub atlas_shape: UVec2,
+    pub atlas_shape: UVec4,
     #[texture(1)]
     #[sampler(2)]
     pub base_color_texture: Option<Handle<Image>>,

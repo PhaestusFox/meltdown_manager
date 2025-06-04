@@ -3486,7 +3486,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_editor_pls",
- "bitflags 1.3.2",
+ "bitflags 2.9.1",
  "chunk_serde",
  "criterion",
  "fixed",
@@ -4299,7 +4299,7 @@ dependencies = [
 [[package]]
 name = "phoxels"
 version = "0.1.0"
-source = "git+https://github.com/PhaestusFox/phoxels.git?branch=jam_updates#ff2849ad9328a9d2ed2a7f0b7b9bf6670a054c9f"
+source = "git+https://github.com/PhaestusFox/phoxels.git?branch=jam_updates#666e718959f8be16b535d9b4d03a642a9b333e2f"
 dependencies = [
  "bevy",
  "indexmap",
@@ -4723,9 +4723,9 @@ dependencies = [
 
 [[package]]
 name = "read-fonts"
-version = "0.29.2"
+version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f96bfbb7df43d34a2b7b8582fcbcb676ba02a763265cb90bc8aabfd62b57d64"
+checksum = "04ca636dac446b5664bd16c069c00a9621806895b8bb02c2dc68542b23b8f25d"
 dependencies = [
  "bytemuck",
  "font-types",
@@ -6774,9 +6774,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99a5bab8d7dedf81405c4bb1f2b83ea057643d9cb28778cea9eecddeedd2e028"
+checksum = "b63fd466826ec8fe25e1fc010c169213fec4e135ac39caccdba830eaa3895923"
 dependencies = [
  "zune-core",
 ]

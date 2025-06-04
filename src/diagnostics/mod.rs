@@ -5,6 +5,7 @@ use bevy::{
         spawn::SpawnIter,
         system::{RunSystemOnce, SystemId},
     },
+    input::mouse::AccumulatedMouseMotion,
     prelude::*,
 };
 mod automata;
@@ -25,7 +26,13 @@ impl Plugin for MeltdownDiagnosticsPlugin {
             .add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init)
-            .add_systems(Update, tab_button_system);
+            .add_systems(Update, tab_button_system)
+            // .add_observer(slider_observer)
+            // .add_observer(slider_drop)
+            // .add_observer(slider_start)
+            // .add_observer(slider_hover)
+            // .add_observer(slider_hover_refined);
+            .add_systems(Update, slider_not_observer);
     }
 }
 
@@ -102,7 +109,7 @@ fn on_init(mut commands: Commands, settings: Res<DiagnosticSettings>) {
                 top: Val::Px(20.),
                 left: Val::Px(0.),
                 width: Val::Percent(25.),
-                height: Val::Percent(50.),
+                height: Val::Percent(55.),
                 ..Default::default()
             },
             Visibility::Hidden,
@@ -112,6 +119,7 @@ fn on_init(mut commands: Commands, settings: Res<DiagnosticSettings>) {
                 on_enable,
                 cuttent_tab: None,
             },
+            Name::new("Diagnostics Window"),
         ))
         .with_child((
             Node {
@@ -147,11 +155,12 @@ fn on_init(mut commands: Commands, settings: Res<DiagnosticSettings>) {
         ))
         .with_child((
             Node {
-                width: Val::Percent(95.),
+                width: Val::Percent(100.),
                 height: Val::Percent(80.),
                 margin: UiRect::all(Val::Auto),
                 flex_direction: FlexDirection::Column,
                 flex_wrap: FlexWrap::Wrap,
+                padding: UiRect::all(Val::Percent(2.5)),
                 ..Default::default()
             },
             Name::new("Content"),
@@ -251,4 +260,205 @@ fn tab_button_system(
             commands.run_system(*system_id);
         }
     }
+}
+
+#[derive(Component)]
+#[require(ComputedNode)]
+#[component(on_add = Slider::on_add)]
+struct Slider {
+    pub on_change: SystemId<In<f32>>,
+    pub min: f32,
+    pub max: f32,
+}
+
+impl Slider {
+    fn on_add(mut world: bevy::ecs::world::DeferredWorld, ctx: bevy::ecs::component::HookContext) {
+        world.commands().entity(ctx.entity).with_child((
+            Node {
+                width: Val::Percent(5.),
+                height: Val::Percent(90.),
+                left: Val::Px(0.),
+                ..Default::default()
+            },
+            BackgroundColor(Color::linear_rgb(0.2, 0.2, 0.2)),
+            SliderHandle {
+                target: ctx.entity,
+                delta: 0.,
+                start: Val::Auto,
+            },
+            ZIndex(1),
+        ));
+    }
+
+    fn vlaue(&self, precent: f32) -> f32 {
+        let range = self.max - self.min;
+        self.min + (precent * range)
+    }
+}
+
+#[derive(Component)]
+#[require(Button)]
+struct SliderHandle {
+    target: Entity,
+    start: Val,
+    delta: f32,
+}
+
+fn slider_start(
+    trigger: Trigger<Pointer<DragStart>>,
+    mut handle: Query<(&mut SliderHandle, &Node)>,
+) {
+    let Ok((mut handle, node)) = handle.get_mut(trigger.target) else {
+        return;
+    };
+    // Store the start position of the handle
+    handle.start = node.left;
+    println!("Slider Start: {:?}", trigger);
+}
+
+fn slider_observer(
+    tringger: Trigger<Pointer<Drag>>,
+    mut handle: Query<(&SliderHandle, &mut Node)>,
+    data: Query<&ComputedNode>,
+) {
+    let Ok((handle, mut node)) = handle.get_mut(tringger.target) else {
+        return;
+    };
+    let Ok(slider) = data.get(handle.target) else {
+        error!("Slider: No Slider Found for Handle {:?}", handle.target);
+        return;
+    };
+    match handle.start {
+        Val::Px(start) => {
+            let Ok(data) = data.get(handle.target) else {
+                error!(
+                    "Slider: No ComputedNode Found for Handle {:?}",
+                    handle.target
+                );
+                return;
+            };
+            node.left =
+                Val::Px((start + tringger.distance.x).clamp(0., slider.size.x - data.size.x));
+        }
+        Val::Percent(start) => {
+            let moved = tringger.distance.x / slider.size.x;
+            println!(
+                "{} / {} = Moved: {:?}",
+                tringger.distance.x, slider.size.x, moved
+            );
+            node.left = Val::Percent((start + moved).clamp(0., 95.));
+        }
+        i => {
+            warn!(
+                "Slider Handle Start Position is {:?}, this is not supported",
+                i
+            );
+        }
+    }
+}
+
+fn slider_drop(
+    trigger: Trigger<Pointer<DragEnd>>,
+    handel: Query<(&Node, &SliderHandle)>,
+    slider: Query<(&Slider, &ComputedNode)>,
+    mut commands: Commands,
+) {
+    let Ok((node, handle)) = handel.get(trigger.target) else {
+        return;
+    };
+    let Ok((slider, data)) = slider.get(handle.target) else {
+        error!("Slider: No Slider Found for Handle {:?}", handle.target);
+        return;
+    };
+    let p = match node.left {
+        Val::Percent(p) => {
+            p * 1.05 // mult by 1.05 to account for the width of the handle
+        }
+        Val::Px(w) => {
+            let p = w / data.size.x;
+            p * 1.05 // mult by 1.05 to account for the width of the handle
+        }
+        i => {
+            warn!(
+                "Slider Handle Left Position is {:?}, this is not supported",
+                i
+            );
+            return;
+        }
+    };
+    commands.run_system_with(slider.on_change, slider.vlaue(p));
+}
+
+fn slider_not_observer(
+    mouse_movement: Res<AccumulatedMouseMotion>,
+    mut handle: Query<(&mut Node, &mut SliderHandle, &Interaction)>,
+    slider: Query<(&Slider, &ComputedNode)>,
+    input: Res<ButtonInput<MouseButton>>,
+    mut commands: Commands,
+) {
+    for (mut node, mut handle, interaction) in &mut handle {
+        let Ok((slider, space)) = slider.get(handle.target) else {
+            error!("Slider: No Slider Found for Handle {:?}", handle.target);
+            continue;
+        };
+        if input.just_pressed(MouseButton::Left) && *interaction == Interaction::Pressed {
+            handle.start = node.left;
+            handle.delta = 0.;
+            println!("clicked");
+        }
+        if input.pressed(MouseButton::Left) {
+            match handle.start {
+                Val::Percent(p) => {
+                    handle.delta += mouse_movement.delta.x;
+                    node.left =
+                        Val::Percent((p + (handle.delta / space.size.x) * 50.).clamp(0., 95.));
+                }
+                Val::Px(start) => {
+                    handle.delta += mouse_movement.delta.x;
+                    node.left = Val::Px((start + handle.delta).clamp(0., space.size.x * 95.));
+                }
+                _ => {
+                    continue; // means not targeted
+                }
+            }
+        }
+        if input.just_released(MouseButton::Left) && handle.start != Val::Auto {
+            let p = match node.left {
+                Val::Percent(p) => p * 105., // mult by 1.05 to account for the width of the handle
+                Val::Px(w) => {
+                    let p = w / space.size.x;
+                    p * 105. // mult by 1.05 to account for the width of the handle
+                }
+                i => {
+                    warn!(
+                        "Slider Handle Left Position is {:?}, this is not supported",
+                        i
+                    );
+                    continue; // means not targeted
+                }
+            };
+            handle.start = Val::Auto;
+            commands.run_system_with(slider.on_change, slider.vlaue(p));
+        }
+    }
+}
+
+fn slider_hover(
+    trigger: Trigger<Pointer<Over>>,
+    handle: Query<&BackgroundColor, With<SliderHandle>>,
+) {
+    let Ok(node) = handle.get(trigger.target) else {
+        return;
+    };
+    println!("Slider Hover: {:?}", node);
+}
+
+fn slider_hover_refined(
+    trigger: Trigger<Pointer<Over>, SliderHandle>,
+    handle: Query<&BackgroundColor, With<SliderHandle>>,
+) {
+    let Ok(node) = handle.get(trigger.target) else {
+        return;
+    };
+    println!("Refined Slider Hover: {:?}", node);
 }

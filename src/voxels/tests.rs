@@ -218,9 +218,11 @@ fn compress_automita() {
     test!(chunk, CompressedChunkData::Solid(CellData::default()));
 
     let dummy = CellData {
-        temperature: FixedNum::from_num(69.42),
+        block: Blocks::Void,
+        energy: FixedNum::from_num(69.42),
         presure: FixedNum::from_num(420),
         charge: FixedNum::from_num(4.2),
+        flags: Default::default(),
     };
     chunk.set_block(0, 0, 0, dummy);
     // test changing 0,0,0 compress to RLE
@@ -261,9 +263,11 @@ fn fuzz_cell_compression() {
             rng.random_range(0..30),
             rng.random_range(0..30),
             CellData {
-                temperature: FixedNum::from_num(x) / div,
+                block: Blocks::Void,
+                energy: FixedNum::from_num(x) / div,
                 charge: FixedNum::from_num(y) / div,
                 presure: FixedNum::from_num(z) / div,
+                flags: Default::default(),
             },
         );
         let comp = chunk.compress();
@@ -303,16 +307,13 @@ fn fuzz_cell_serde() {
             rng.random_range(0..30),
             rng.random_range(0..30),
             CellData {
-                temperature: FixedNum::from_num(x) / div,
+                block: Blocks::Void,
+                energy: FixedNum::from_num(x) / div,
                 charge: FixedNum::from_num(y) / div,
                 presure: FixedNum::from_num(z) / div,
+                flags: Default::default(),
             },
         );
         test!(chunk);
     }
-}
-
-#[test]
-fn mod_neg_one() {
-    assert_eq!(-1 % 30, 29);
 }

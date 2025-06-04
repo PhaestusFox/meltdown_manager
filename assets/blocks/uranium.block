@@ -1,0 +1,14 @@
+{
+    type: Uranium,
+    Molar Mass: 238
+    Melting Point: 	1405.3 K ​(1132.2 °C, ​2070 °F)
+    Electrical Conductivity: Relatively poor conductor of electricity.
+    Heat of fusion 9.14 kJ/mol --- 38403 J
+    Heat of vaporization 417.1 kJ/mol --- 1752521 J
+    Boiling point	4404 K ​(4131 °C, ​7468 °F)
+    Density: Very high, 19.1 g/cm3 --- 19100 kg/m3 --- 19.1 u/vox
+    Molar heat capacity	27.665 J/(mol·K) --- 116.24 J/(kg.K) --- 2220.184 J/K
+    Thermal conductivity 27.5 W/(m⋅K) ---                   --- 27.5 W/K
+}
+
+alpha = TC/(Mass * HC)

@@ -1,50 +1,42 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
+use crate::voxels::blocks::Blocks;
+
 use super::FixedNum;
 use super::*;
 use bevy::prelude::*;
 use chunk_serde::BinSerializer;
+const TWO: FixedNum = FixedNum::lit("2.0");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellData {
-    pub temperature: FixedNum,
+    pub block: Blocks,
+    pub energy: FixedNum,
     pub charge: FixedNum,
     pub presure: FixedNum,
+    pub flags: CellFlags,
 }
 
 pub struct BlockProperties {
     pub heat: FixedNum,
     pub conductivity: FixedNum,
-    pub density: FixedNum,
+    pub mass: FixedNum,
+
+    // For heat
+    /// units of energy per degree Kelvin
+    pub heat_capacity: FixedNum,
+    /// units of energy per degree Kelvin per TimeStep
+    pub thermal_conductivity: FixedNum,
+
     pub melting_point: FixedNum,
-}
-
-impl BlockProperties {
-    pub const VOID: BlockProperties = BlockProperties {
-        heat: FixedNum::ZERO,
-        conductivity: FixedNum::ZERO,
-        density: FixedNum::ZERO,
-        melting_point: FixedNum::ZERO,
-    };
-
-    pub const DEFAULT: BlockProperties = BlockProperties {
-        heat: FixedNum::lit("0.0"),
-        conductivity: FixedNum::lit("1.00"),
-        density: FixedNum::lit("1.0"),
-        melting_point: FixedNum::lit("500.0"),
-    };
-
-    pub const URANIUM: BlockProperties = BlockProperties {
-        heat: FixedNum::lit("5.0"),
-        conductivity: FixedNum::lit("1.00"),
-        density: FixedNum::lit("19.1"),
-        melting_point: FixedNum::lit("500.0"),
-    };
+    pub fusion_energy: FixedNum,
+    pub boiling_point: FixedNum,
+    pub vaporization_energy: FixedNum,
 }
 
 impl chunk_serde::Serialize for CellData {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
-        for byte in self.temperature.to_be_bytes() {
+        for byte in self.energy.to_be_bytes() {
             vec.push(byte);
         }
         for byte in self.charge.to_be_bytes() {
@@ -53,17 +45,21 @@ impl chunk_serde::Serialize for CellData {
         for byte in self.presure.to_be_bytes() {
             vec.push(byte);
         }
+        vec.push(self.block as u8);
+        vec.push(self.flags.bits());
         Ok(12)
     }
 
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         Ok((
             CellData {
-                temperature: FixedNum::from_be_bytes(slice[0..4].try_into().unwrap()),
+                block: Blocks::from_repr(slice[13]).unwrap_or(Blocks::Void),
+                energy: FixedNum::from_be_bytes(slice[0..4].try_into().unwrap()),
                 charge: FixedNum::from_be_bytes(slice[4..8].try_into().unwrap()),
                 presure: FixedNum::from_be_bytes(slice[8..12].try_into().unwrap()),
+                flags: CellFlags::from_bits_truncate(slice[14]),
             },
-            12,
+            13,
         ))
     }
 
@@ -111,59 +107,37 @@ impl chunk_serde::Serialize for CellData {
 impl Default for CellData {
     fn default() -> Self {
         CellData {
-            temperature: K_AT_20C,
+            block: Blocks::Air,
+            energy: K_AT_20C,
             presure: ATM_1,
             charge: STD_CHARGE,
+            flags: CellFlags::empty(),
         }
     }
 }
 
 impl CellData {
-    pub const THE_VOID: CellData = CellData {
-        temperature: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
-    };
-
-    pub const MIN: CellData = CellData {
-        temperature: FixedNum::MIN,
-        charge: FixedNum::MIN,
-        presure: FixedNum::MIN,
-    };
-
-    pub const MAX: CellData = CellData {
-        temperature: FixedNum::MAX,
-        charge: FixedNum::MAX,
-        presure: FixedNum::MAX,
-    };
-
-    pub const ZERO: CellData = CellData {
-        temperature: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
-    };
-
     pub fn min(&mut self, other: &Self) {
-        self.temperature = self.temperature.min(other.temperature);
+        self.energy = self.energy.min(other.energy);
         self.charge = self.charge.min(other.charge);
         self.presure = self.presure.min(other.presure);
     }
 
     pub fn max(&mut self, other: &Self) {
-        self.temperature = self.temperature.max(other.temperature);
+        self.energy = self.energy.max(other.energy);
         self.charge = self.charge.max(other.charge);
         self.presure = self.presure.max(other.presure);
     }
 
     pub fn any_zero(&self) -> bool {
-        self.temperature.is_zero() | self.charge.is_zero() | self.presure.is_zero()
+        self.energy.is_zero() | self.charge.is_zero() | self.presure.is_zero()
     }
 
     pub fn normalize(&self, range: CellData) -> CellData {
         let mut out = *self;
-        if range.temperature != FixedNum::ZERO {
-            out.temperature /= range.temperature;
-            out.temperature = out.temperature.clamp(FixedNum::ZERO, FixedNum::ONE);
+        if range.energy != FixedNum::ZERO {
+            out.energy /= range.energy;
+            out.energy = out.energy.clamp(FixedNum::ZERO, FixedNum::ONE);
         }
         if range.charge != FixedNum::ZERO {
             out.charge /= range.charge;
@@ -187,7 +161,7 @@ impl Sub for CellData {
 
 impl SubAssign for CellData {
     fn sub_assign(&mut self, rhs: Self) {
-        self.temperature -= rhs.temperature;
+        self.energy -= rhs.energy;
         self.presure -= rhs.presure;
         self.charge -= rhs.charge;
     }
@@ -203,7 +177,7 @@ impl Div for CellData {
 
 impl DivAssign for CellData {
     fn div_assign(&mut self, rhs: Self) {
-        self.temperature /= rhs.temperature;
+        self.energy /= rhs.energy;
         self.charge /= rhs.charge;
         self.presure /= rhs.presure;
     }
@@ -211,7 +185,7 @@ impl DivAssign for CellData {
 
 impl MulAssign for CellData {
     fn mul_assign(&mut self, rhs: Self) {
-        self.temperature *= rhs.temperature;
+        self.energy *= rhs.energy;
         self.presure *= rhs.presure;
         self.charge *= rhs.charge;
     }
@@ -228,7 +202,7 @@ impl Mul for CellData {
 impl<T: fixed::traits::ToFixed> MulAssign<T> for CellData {
     fn mul_assign(&mut self, rhs: T) {
         let rhs = FixedNum::from_num(rhs);
-        self.temperature *= rhs;
+        self.energy *= rhs;
         self.presure *= rhs;
         self.charge *= rhs;
     }
@@ -244,7 +218,7 @@ impl<T: fixed::traits::ToFixed> Mul<T> for CellData {
 
 impl CellData {
     pub fn clamp(&mut self, min: FixedNum, max: FixedNum) {
-        self.temperature = self.temperature.clamp(min, max);
+        self.energy = self.energy.clamp(min, max);
         self.charge = self.charge.clamp(min, max);
         self.presure = self.presure.clamp(min, max);
     }
@@ -252,7 +226,7 @@ impl CellData {
 
 impl AddAssign for CellData {
     fn add_assign(&mut self, rhs: Self) {
-        self.temperature += rhs.temperature;
+        self.energy += rhs.energy;
         self.presure += rhs.presure;
         self.charge += rhs.charge;
     }
@@ -269,7 +243,7 @@ impl Add for CellData {
 impl<T: fixed::traits::ToFixed> DivAssign<T> for CellData {
     fn div_assign(&mut self, rhs: T) {
         let rhs = FixedNum::from_num(rhs);
-        self.temperature /= rhs;
+        self.energy /= rhs;
         self.presure /= rhs;
         self.charge /= rhs;
     }
@@ -280,5 +254,57 @@ impl<T: fixed::traits::ToFixed> Div<T> for CellData {
     fn div(mut self, rhs: T) -> Self::Output {
         self /= rhs;
         self
+    }
+}
+
+impl CellData {
+    pub fn temperature(&self) -> FixedNum {
+        let melting_loss = self.block.block_properties().fusion_energy;
+        let boiling_loss = self.block.block_properties().vaporization_energy;
+        if self.flags.contains(CellFlags::IS_GAS) {
+            (self.energy - melting_loss - boiling_loss)
+                / self.block.block_properties().heat_capacity
+        } else if self.flags.contains(CellFlags::IS_LIQUID) {
+            (self.energy - melting_loss) / self.block.block_properties().heat_capacity
+        } else {
+            self.energy / self.block.block_properties().heat_capacity
+        }
+    }
+
+    pub fn set_phase(&mut self) {
+        let melting_loss = self.block.block_properties().fusion_energy;
+        let boiling_loss = self.block.block_properties().vaporization_energy;
+
+        let temp_after_melting =
+            (self.energy - melting_loss) / self.block.block_properties().heat_capacity;
+        let temp_after_boiling = (self.energy - boiling_loss - melting_loss)
+            / self.block.block_properties().heat_capacity;
+
+        if temp_after_boiling > self.block.block_properties().boiling_point {
+            self.flags.insert(CellFlags::IS_GAS);
+            self.flags.remove(CellFlags::IS_LIQUID);
+        } else if temp_after_melting > self.block.block_properties().melting_point {
+            self.flags.insert(CellFlags::IS_LIQUID);
+            self.flags.remove(CellFlags::IS_GAS);
+        } else {
+            self.flags.remove(CellFlags::IS_LIQUID | CellFlags::IS_GAS);
+        }
+    }
+
+    pub fn lookup_g(&self, block: Blocks) -> FixedNum {
+        if block == self.block {
+            return self.block.block_properties().thermal_conductivity;
+        }
+        // turn this into a lookup table
+        TWO / (FixedNum::ONE / self.block.block_properties().thermal_conductivity
+            + FixedNum::ONE / block.block_properties().thermal_conductivity)
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct CellFlags: u8 {
+        const IS_LIQUID = 0b00000001;
+        const IS_GAS = 0b00000010;
     }
 }

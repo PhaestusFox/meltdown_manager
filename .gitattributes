@@ -3,3 +3,6 @@ assets/** filter=lfs diff=lfs merge=lfs -text
 
 # EXCLUDE .wgsl files from LFS tracking within assets
 assets/**/*.wgsl !filter !diff !merge !text
+
+# EXCLUDE .block files from LFS tracking within assets
+assets/**/*.block !filter !diff !merge !text

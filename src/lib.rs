@@ -34,7 +34,7 @@ pub fn run_game() {
 
     let mut app = App::new();
 
-    app.insert_resource(Time::<Fixed>::from_hz(10.));
+    app.insert_resource(Time::<Fixed>::from_hz(15.));
     app
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)
@@ -45,9 +45,10 @@ pub fn run_game() {
     // add my diagnostics
     app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
     // only add editor in debug builds
+    // editor is not supported on wasm32
     #[cfg(debug_assertions)]
+    #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(bevy_editor_pls::EditorPlugin::default());
-
     app.run();
 }
 

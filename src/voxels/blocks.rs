@@ -23,18 +23,20 @@ pub enum Blocks {
     Iron,
     Steel,
     Uranium,
+    Air,
+    Water,
 }
 
 impl Blocks {
     pub const fn block_properties(&self) -> BlockProperties {
         match self {
             Blocks::Void => BlockProperties::VOID,
-            Blocks::Copper => BlockProperties {
-                ..BlockProperties::DEFAULT
-            },
+            Blocks::Copper => BlockProperties::COPPER,
             Blocks::Iron => BlockProperties::DEFAULT,
             Blocks::Steel => BlockProperties::DEFAULT,
             Blocks::Uranium => BlockProperties::URANIUM,
+            Blocks::Air => BlockProperties::AIR,
+            Blocks::Water => BlockProperties::WATER,
         }
     }
 }

@@ -33,7 +33,7 @@ impl NextStep {
     }
 }
 
-#[derive(Clone, Copy, Deref, DerefMut)]
+#[derive(Clone, Copy, Deref, DerefMut, Debug)]
 pub struct CellId(IVec3);
 
 pub struct CellNeighbourIter(CellId, u8);
@@ -72,22 +72,20 @@ impl CellId {
 pub struct ChunkIter<'a> {
     id: CellId,
     data: std::slice::IterMut<'a, CellData>,
-    block_type: std::slice::Iter<'a, Blocks>,
 }
 
 impl<'a> ChunkIter<'a> {
-    pub fn new(chunk: &'a mut Cells, blocks: &'a ChunkData) -> Self {
+    pub fn new(chunk: &'a mut Cells) -> Self {
         let id = CellId(IVec3::new(0, 0, 0));
         ChunkIter {
             id,
             data: chunk.iter_mut(),
-            block_type: blocks.iter(),
         }
     }
 }
 
 impl<'a> Iterator for ChunkIter<'a> {
-    type Item = (CellId, &'a mut CellData, Blocks);
+    type Item = (CellId, &'a mut CellData);
 
     fn next(&mut self) -> Option<Self::Item> {
         let id = self.id;
@@ -100,13 +98,7 @@ impl<'a> Iterator for ChunkIter<'a> {
             self.id.z = 0;
             self.id.y += 1;
         }
-        self.data.next().map(|cell| {
-            (
-                id,
-                cell,
-                self.block_type.next().cloned().unwrap_or(Blocks::Void),
-            )
-        })
+        self.data.next().map(|cell| (id, cell))
     }
 }
 

@@ -104,13 +104,10 @@ fn on_close(content: In<Entity>, mut commands: Commands) {
 }
 
 fn update_count(
-    mut text: Query<&mut Text, With<CountText>>,
+    mut text: Single<&mut Text, With<CountText>>,
     mut diagnostics: Diagnostics,
     count: Res<ChunkCount>,
 ) {
-    let Ok(mut text) = text.single_mut() else {
-        return;
-    };
     if !count.is_changed() {
         return;
     }
@@ -175,9 +172,8 @@ fn validate_neighbours(
     };
 }
 
-fn mark_unknown(mut state: ResMut<TabState>, change: Query<(), Added<ChunkId>>) {
-    for _ in change.iter() {
+fn mark_unknown(mut state: ResMut<TabState>, change: Query<(), Changed<ChunkId>>) {
+    if change.iter().next().is_some() {
         state.valadation_state = ValidationState::Unknown;
-        return;
     }
 }

@@ -36,6 +36,10 @@ impl ChunkId {
         Self(IVec3::new(x, y, z))
     }
 
+    pub fn manhattan_distance(self, other: &ChunkId) -> u32 {
+        ((self.x - other.x).abs() + (self.y - other.y).abs() + (self.z - other.z).abs()) as u32
+    }
+
     fn on_add(mut world: bevy::ecs::world::DeferredWorld, _ctx: bevy::ecs::component::HookContext) {
         world.resource_mut::<crate::diagnostics::ChunkCount>().inc();
     }
@@ -139,6 +143,11 @@ impl ChunkId {
                 map.insert_chunk(id, old);
             }
         }
+    }
+
+    pub fn from_translation(mut translation: Vec3) -> Self {
+        translation /= CHUNK_SIZE as f32;
+        ChunkId(translation.as_ivec3())
     }
 }
 

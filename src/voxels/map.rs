@@ -1,6 +1,7 @@
 use bevy::{
-    app::{App, Startup},
+    app::{App, FixedPostUpdate, Startup, Update},
     asset::AssetApp,
+    ecs::schedule::IntoScheduleConfigs,
     math::UVec3,
 };
 use noise::{MultiFractal, NoiseFn};
@@ -41,7 +42,8 @@ pub fn map_plugin(app: &mut App) {
                     }
                     let num_blocks = Blocks::COUNT as f64 - 1.;
                     for y in 0..(h - start_y).min(30) {
-                        let r = ((noise.sample(gx, y + start_y, gz) * 10.) % num_blocks) as u8;
+                        let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 3.) % num_blocks)
+                            as u8;
                         let block = Blocks::from_repr(r + 1).unwrap_or_default();
                         chunk.set_block(x as u32, y as u32, z as u32, block);
                     }
@@ -50,6 +52,11 @@ pub fn map_plugin(app: &mut App) {
             chunk
         }));
     app.add_plugins(cellular_automata::plugin);
+
+    app.add_systems(
+        FixedPostUpdate,
+        super::remove_evaluation.before(cellular_automata::set_prev),
+    );
 }
 
 #[derive(Clone)]
