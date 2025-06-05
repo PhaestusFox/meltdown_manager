@@ -29,6 +29,10 @@ impl ChunkCount {
             error!("Attempting to decrement chunk count below zero");
         }
     }
+
+    pub fn get(&self) -> usize {
+        self.0
+    }
 }
 
 pub fn plugin(app: &mut App) {
@@ -114,6 +118,7 @@ fn update_count(
     diagnostics.add_measurement(&CHUNK_COUNT, || count.0 as f64);
     text.0 = format!("Count: {}", count.0);
 }
+
 fn update_text(mut text: Query<&mut Text, With<ValadatreText>>, state: Res<TabState>) {
     let Ok(mut text) = text.single_mut() else {
         return;

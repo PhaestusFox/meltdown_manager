@@ -1,6 +1,10 @@
 #![feature(impl_trait_in_assoc_type)]
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
+use bevy::scene::ron::de;
+
+use crate::voxels::blocks::Blocks;
+use crate::voxels::map::ChunkData;
 
 pub mod voxels;
 
@@ -8,6 +12,8 @@ mod ui;
 
 mod diagnostics;
 mod player;
+
+const TARGET_TICKTIME: f64 = 100.; // 10 ticks per second
 
 pub fn run_game() {
     // this is what the template was doing
@@ -34,13 +40,17 @@ pub fn run_game() {
 
     let mut app = App::new();
 
-    app.insert_resource(Time::<Fixed>::from_hz(15.));
+    app.insert_resource(Time::<Fixed>::from_duration(
+        std::time::Duration::from_millis(TARGET_TICKTIME as u64),
+    ));
     app
         // add modifide DefaultPlugin
         .add_plugins(default_plugins)
-        .add_plugins((player::plugin, voxels::map::map_plugin))
+        .add_plugins(player::plugin)
         .add_systems(Startup, setup)
         .add_systems(Startup, ui::ui::spawn_crosshair);
+
+    app.add_plugins(voxels::map::map_plugin);
 
     // add my diagnostics
     app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
@@ -49,6 +59,10 @@ pub fn run_game() {
     #[cfg(debug_assertions)]
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(bevy_editor_pls::EditorPlugin::default());
+
+    // // dont know why some meshes are being detected as empty
+    // app.add_systems(Update, catch_failed_meshes);
+
     app.run();
 }
 
@@ -62,3 +76,22 @@ fn setup(mut commands: Commands) {
 }
 
 mod utils;
+
+fn catch_failed_meshes(
+    mut meshes: ResMut<phoxels::ChunkMesher>,
+    query: Query<(Entity, &ChunkData), (With<ChunkData>, Without<Mesh3d>)>,
+) {
+    if meshes.is_empty() {
+        for (entity, data) in query.iter() {
+            let mut not_air = false;
+            for block in data.iter() {
+                if *block != Blocks::Air {
+                    not_air = true;
+                }
+            }
+            if not_air {
+                meshes.add_to_queue(entity);
+            }
+        }
+    }
+}

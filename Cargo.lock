@@ -183,9 +183,9 @@ checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
 name = "anstyle"
-version = "1.0.10"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55cc3b69f167a1ef2e161439aa98aed94e6028e5f9a59be9a6ffb47aef1651f9"
+checksum = "862ed96ca487e809f1c8e5a8447f6ee2cf102f846893800b20cebdf541fc6bbd"
 
 [[package]]
 name = "anyhow"
@@ -4299,7 +4299,7 @@ dependencies = [
 [[package]]
 name = "phoxels"
 version = "0.1.0"
-source = "git+https://github.com/PhaestusFox/phoxels.git?branch=jam_updates#666e718959f8be16b535d9b4d03a642a9b333e2f"
+source = "git+https://github.com/PhaestusFox/phoxels.git?branch=jam_updates#4da40349b05bb3d0c408846cd493e9a622e03b7d"
 dependencies = [
  "bevy",
  "indexmap",
@@ -6774,9 +6774,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.4.15"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b63fd466826ec8fe25e1fc010c169213fec4e135ac39caccdba830eaa3895923"
+checksum = "3e4a518c0ea2576f4da876349d7f67a7be489297cd77c2cf9e04c2e05fcd3974"
 dependencies = [
  "zune-core",
 ]

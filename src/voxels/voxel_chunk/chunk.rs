@@ -61,7 +61,7 @@ impl ChunkId {
         world
             .get_mut::<Transform>(ctx.entity)
             .expect("Required Componet")
-            .translation = (id.0 * CHUNK_SIZE as i32).as_vec3();
+            .translation = (id.0 * CHUNK_SIZE).as_vec3();
 
         if world.get::<Name>(ctx.entity).is_none() {
             world
@@ -226,17 +226,12 @@ impl<T: PartialEq> PartialEq for Chunk<T> {
 impl<T> Chunk<T> {
     #[inline(always)]
     pub fn index(x: i32, y: i32, z: i32) -> usize {
-        x as usize + z as usize * CHUNK_SIZE + y as usize * CHUNK_ARIA
+        (x + z * CHUNK_SIZE + y * CHUNK_ARIA) as usize
     }
 
     #[inline(always)]
     fn in_bounds(x: i32, y: i32, z: i32) -> bool {
-        x < CHUNK_SIZE as i32
-            && y < CHUNK_SIZE as i32
-            && z < CHUNK_SIZE as i32
-            && x >= 0
-            && y >= 0
-            && z >= 0
+        x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE && x >= 0 && y >= 0 && z >= 0
     }
 
     #[inline(always)]
@@ -568,16 +563,11 @@ impl Neighbours {
 impl From<&ChunkData> for Chunk<Blocks> {
     fn from(data: &ChunkData) -> Self {
         let mut blocks = Vec::with_capacity(CHUNK_VOL);
-        for i in 0..CHUNK_SIZE as u32 {
-            for j in 0..CHUNK_SIZE as u32 {
-                for k in 0..CHUNK_SIZE as u32 {
-                    let block = data
-                        .get_block(i, j, k)
-                        .expect("Block should be in bounds")
-                        .into();
-                    blocks.push(block);
-                }
-            }
+        for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
+            let Some(block) = data.get_block(x as u32, y as u32, z as u32) else {
+                panic!("Invalid Block at ({}, {}, {}); {:?}", x, y, z, data);
+            };
+            blocks.push(block);
         }
         Chunk { blocks }
     }

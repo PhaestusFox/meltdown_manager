@@ -1,22 +1,22 @@
-use std::ops::{Deref, DerefMut};
+use std::{ops::DerefMut, time::Instant};
 
-use bevy::{log::tracing_subscriber::filter::combinator::Not, prelude::*};
+use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*};
 
 use crate::{
+    TARGET_TICKTIME,
+    diagnostics::ChunkCount,
     utils::BlockIter,
-    voxels::{
-        Chunk, Neighbours,
-        cellular_automata::*,
-        map::{CHUNK_VOL, ChunkData},
-    },
+    voxels::{Chunk, ChunkId, Neighbours, blocks::Blocks, cellular_automata::*, map::ChunkData},
 };
 
 #[derive(States, Clone, Copy, Debug, Hash, Eq, Default)]
-enum BatchingStep {
+pub enum BatchingStep {
     #[default]
-    SetupStep,
-    CalculatingGroups,
-    RunningGroup(usize),
+    SetupWorld,
+    Pause,
+    CalculateBatchs,
+    Ready,
+    Run,
     Done,
 }
 
@@ -28,68 +28,296 @@ impl PartialEq for BatchingStep {
 
 #[derive(Resource)]
 struct BatchingStrategy {
-    current_step_start: Option<std::time::Instant>,
-    last_step_time: f32,
-    groups: Vec<Vec<Entity>>,
+    current_step_start: Option<Instant>,
+    longest_step: f32,
+    batch_size: usize,
+    groups: Vec<EntityIndexSet>,
     active_groups: usize,
 }
 
+#[derive(Resource, Default)]
+struct NextBatch(usize);
+
+impl NextBatch {
+    fn reset(&mut self) {
+        self.0 = 0;
+    }
+
+    fn get(&self) -> usize {
+        self.0
+    }
+
+    fn take(&mut self) -> usize {
+        self.0 += 1;
+        self.0 - 1
+    }
+}
+
+impl BatchingStrategy {
+    fn max_batches(&self) -> usize {
+        self.groups.len()
+    }
+
+    fn reserve(&mut self, size: usize) {
+        if self.max_batches() >= size {
+            return;
+        }
+        for _ in self.groups.len()..size {
+            self.groups
+                .push(EntityIndexSet::with_capacity(self.batch_size));
+        }
+    }
+
+    fn finish(&mut self) {
+        self.groups.iter_mut().for_each(|g| g.clear());
+        self.active_groups = 0;
+    }
+
+    fn get_batch(&self, batch: usize) -> Option<&EntityIndexSet> {
+        if self.active_groups <= batch || self.groups.len() <= batch {
+            error!(
+                "Batching strategy has only {} active groups, but requested batch {}",
+                self.active_groups, batch
+            );
+            return None;
+        }
+        Some(&self.groups[batch])
+    }
+
+    fn batchs(&self) -> impl Iterator<Item = &EntityIndexSet> {
+        self.groups.iter().take(self.active_groups)
+    }
+
+    fn len(&self) -> usize {
+        self.active_groups
+    }
+
+    fn is_empty(&self) -> bool {
+        self.active_groups == 0
+    }
+
+    fn count(&self) -> usize {
+        self.groups
+            .iter()
+            .take(self.active_groups)
+            .map(|g| g.len())
+            .sum()
+    }
+
+    fn clear(&mut self) {
+        for group in &mut self.groups {
+            group.clear();
+        }
+    }
+
+    fn find_batch(&self, entity: Entity) -> Option<usize> {
+        let mut found = None;
+        self.groups.iter().enumerate().for_each(|(i, g)| {
+            if g.contains(&entity) {
+                found = Some(i);
+            }
+        });
+        found
+    }
+}
+
 impl FromWorld for BatchingStrategy {
-    fn from_world(_: &mut World) -> Self {
+    fn from_world(world: &mut World) -> Self {
+        world.init_resource::<NextBatch>();
+        world.init_resource::<Step>();
         BatchingStrategy {
             current_step_start: None,
-            last_step_time: 0.0,
+            longest_step: 0.0,
+            batch_size: 0,
             groups: Vec::new(),
             active_groups: 0,
         }
     }
 }
 
+#[derive(Resource, Default)]
+pub struct Step(BatchingStep);
+
+impl Step {
+    fn set(&mut self, step: BatchingStep) {
+        debug_assert_ne!(self.0, step, "Setting Step to the same value: {:?}", step);
+        self.0 = step;
+    }
+
+    fn get(&self) -> BatchingStep {
+        self.0
+    }
+}
+
 pub fn plugin(app: &mut App) {
     app.init_resource::<BatchingStrategy>()
-        .init_state::<BatchingStep>()
-        .register_required_components::<Cells, NextStep>()
-        .add_systems(FixedPostUpdate, force_finish)
-        .add_systems(FixedPreUpdate, set_prev);
+        .register_required_components::<Cells, NextStep>() // make sure Cells always has NextStep
+        // If we are out of time for a tick, we force finish it in one frame --- makes Step = Done
+        .add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)))
+        // If tick it finished, we update the state of the world --- makes Step = Ready
+        .add_systems(PreUpdate, set_prev.run_if(in_step(BatchingStep::Done)))
+        // If Step = Run, we run a batch of the simulation --- Sets Step = Done if all batches are finished
+        // This must be in Update to maximize performance -- Because it will run with most of the rest of the game
+        .add_systems(Update, run_batch.run_if(in_step(BatchingStep::Run)))
+        // If Step = Ready, we check if we need to update the batching groups
+        // for now we do this every second
+        // Update batching groups sets Step = Ready
+        // Important: only huristic system should schedule the RecalculateBatchs step
+        // ^ Thecnically any system that only runs if Step = Ready can schedule it
+        .add_systems(
+            PostUpdate,
+            (
+                batching_huristinc.run_if(in_step(BatchingStep::Ready)),
+                update_batching.run_if(in_step(BatchingStep::CalculateBatchs)),
+            )
+                .chain(),
+        )
+        // If Step = Ready by time we get to last, set Step = Run --- this is the start of the tick
+        // would be better if could be before update to avoid a wasted frame
+        // ^ can't think of a way to do this that wouldn't clober Step before other systems get to do there checks
+        .add_systems(Last, start_tick.run_if(in_step(BatchingStep::Ready)));
+
+    // wait for world to finish generating chunks
+    app.add_systems(
+        Update,
+        start_ticking.run_if(in_step(BatchingStep::SetupWorld)),
+    );
+
+    app.add_systems(Update, toggle_pause);
 }
 
-pub fn set_prev(
-    mut chunks: Query<(&mut Cells, &mut NextStep, Ref<ChunkData>)>,
-    mut to_init: Query<(Entity, &ChunkData), Without<NextStep>>,
-    mut commands: Commands,
+fn set_prev(
+    mut chunks: Query<(Entity, &mut Cells, &mut NextStep)>,
+    mut state: ResMut<Step>,
+    mut batch: ResMut<NextBatch>,
+
+    strategy: Res<BatchingStrategy>,
 ) {
-    for (mut chunk, mut next, data) in &mut chunks {
-        for (x, y, z) in BlockIter::<30, 30, 30>::new() {
-            let block = data
-                .get_block(x as u32, y as u32, z as u32)
-                .unwrap_or(crate::voxels::blocks::Blocks::Void);
-            next.get_by_index_mut(Cells::index(x, y, z)).block = block;
-            chunk.get_by_index_mut(Cells::index(x, y, z)).block = block;
+    for (entity, mut chunk, mut next) in &mut chunks {
+        if !next.has_run {
+            error!("NextStep for entity {entity:?} has not run, but we are setting it as previous. This is a bug.\n
+            it should have run as part of batch: {:?}\n", strategy.find_batch(entity));
         }
-        std::mem::swap(chunk.as_mut(), next.deref_mut());
+        assert!(next.has_run);
+        next.has_run = false;
+        std::mem::swap(chunk.as_mut(), &mut next.chunk);
     }
-    for (entity, chunk) in &mut to_init {
-        // let prev = NextStep(std::mem::replace(chunk.as_mut(), Chunk::empty()));
-        let mut next: Chunk<CellData> = Chunk::empty();
-        for (x, y, z) in BlockIter::<30, 30, 30>::new() {
-            let block = chunk
-                .get_block(x as u32, y as u32, z as u32)
-                .unwrap_or(crate::voxels::blocks::Blocks::Void);
-            next.get_by_index_mut(Cells::index(x, y, z)).block = block;
-        }
-        commands.entity(entity).insert(NextStep(next));
-    }
+    batch.reset();
+    state.set(BatchingStep::Ready);
 }
 
-pub fn force_finish(state: Res<BatchingStrategy>, chunks: Query<&mut NextStep>) {}
+fn update_batching(
+    mut strategy: ResMut<BatchingStrategy>,
+    query: Query<Entity, With<Cells>>,
+    diagnostics: Res<DiagnosticsStore>,
+    mut state: ResMut<Step>,
+    chunk_count: Res<crate::diagnostics::ChunkCount>,
+) {
+    println!("calculating batching groups");
 
-pub fn step_system(
+    let frame_time = if let Some(b) =
+        diagnostics.get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FRAME_TIME)
+    {
+        b.average().unwrap_or(TARGET_TICKTIME)
+    } else {
+        TARGET_TICKTIME
+    };
+
+    // set min batch size to 10
+    let target = (chunk_count.get() / 10).max(5);
+
+    info!("Frame time: {:.04?}ms", frame_time);
+    let batches = ((TARGET_TICKTIME / frame_time) as usize).clamp(4, target) - 1;
+    info!("Targeting {} batches for this tick", batches);
+    info!(
+        "Targeting {} batches for this tick",
+        (TARGET_TICKTIME / frame_time)
+    );
+    strategy.reserve(batches);
+    strategy.active_groups = batches;
+    let mut total_entitys = 0;
+
+    strategy.clear();
+
+    for (i, entity) in query.iter().enumerate() {
+        total_entitys += 1;
+        strategy.groups[i % batches].insert(entity);
+    }
+    strategy.batch_size = total_entitys / batches;
+    info!(
+        "set batches to {} with {} entities per batch",
+        batches, strategy.batch_size
+    );
+    debug_assert_eq!(
+        chunk_count.get(),
+        total_entitys,
+        "Chunk count does not number of entities found to tick"
+    );
+    state.set(BatchingStep::Ready);
+}
+
+fn force_finish(
+    strategy: Res<BatchingStrategy>,
+    start_state: Query<&Cells>,
+    mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
+    mut next_state: ResMut<Step>,
+    mut next_batch: ResMut<NextBatch>,
+) {
+    let mut finishing = Vec::with_capacity(strategy.len());
+    println!(
+        "Forcing finish of batching groups, running {} batches",
+        next_batch.get()
+    );
+    for (i, finish) in strategy.batchs().enumerate().skip(next_batch.get()) {
+        // let start = Instant::now();
+        next_batch.take();
+        new_state
+            .par_iter_many_unique_mut(finish)
+            .for_each(|(center, mut chunk, neighbours)| {
+                let Ok(center_pre) = start_state.get(center) else {
+                    return;
+                };
+                let mut chunks = [Some(center_pre), None, None, None, None, None, None];
+                for (i, n) in neighbours.iter() {
+                    if let Ok(neighbour) = start_state.get(n) {
+                        chunks[i as usize + 1] = Some(neighbour);
+                    }
+                }
+                super::step(ChunkIter::new(&mut chunk.chunk), ChunkGared::new(chunks));
+                chunk.has_run = true;
+            });
+        finishing.push(i);
+        // println!("Finished batch{b} in {}us", start.elapsed().as_micros());
+    }
+    warn!(
+        "Failed to finish batching, forcing finish Batchs({:?}) frame",
+        finishing
+    );
+
+    next_state.set(BatchingStep::Done);
+}
+
+fn run_batch(
+    strategy: Res<BatchingStrategy>,
+    mut state: ResMut<Step>,
     max: NonSend<crate::diagnostics::MaxValue>,
     start_state: Query<&Cells>,
     mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
+    mut next_batch: ResMut<NextBatch>,
 ) {
+    if strategy.is_empty() {
+        error!("Batching strategy is empty, but we are in the run step. This is a bug.");
+        state.set(BatchingStep::CalculateBatchs);
+        return;
+    }
     let sender = max.get_sender();
-    new_state.par_iter_mut().for_each_init(
+    let current = next_batch.take();
+    trace!("Running batch {current} of {}", strategy.len());
+    let Some(batch) = strategy.get_batch(current) else {
+        state.set(BatchingStep::CalculateBatchs);
+        return;
+    };
+    new_state.par_iter_many_unique_mut(batch).for_each_init(
         || sender.clone(),
         |max, (center, mut chunk, neighbours)| {
             let Ok(center_pre) = start_state.get(center) else {
@@ -101,10 +329,167 @@ pub fn step_system(
                     chunks[i as usize + 1] = Some(neighbour);
                 }
             }
-
-            let out =
-                super::logic::step(ChunkIter::new(chunk.deref_mut()), ChunkGared::new(chunks));
-            let _ = max.send(out);
+            debug_assert!(!chunk.has_run);
+            #[cfg(debug_assertions)]
+            {
+                let out = super::logic::step_diag(
+                    ChunkIter::new(&mut chunk.chunk),
+                    ChunkGared::new(chunks),
+                );
+                let _ = max.send(out);
+            }
+            #[cfg(not(debug_assertions))]
+            super::step(ChunkIter::new(&mut chunk.chunk), ChunkGared::new(chunks));
+            chunk.has_run = true;
         },
     );
+
+    if next_batch.get() >= strategy.len() {
+        state.set(BatchingStep::Done);
+    }
 }
+
+fn start_ticking(
+    mut state: ResMut<Step>,
+    generating_chunks: Res<phoxels::ChunkGenerator<Blocks>>,
+    chunk_count: Res<ChunkCount>,
+) {
+    if generating_chunks.is_empty() {
+        println!(
+            "all chunks({}) are generated, starting simulation",
+            chunk_count.get()
+        );
+        state.set(BatchingStep::CalculateBatchs);
+    }
+}
+
+fn toggle_pause(
+    mut state: ResMut<Step>,
+    mut batching_strategy: ResMut<BatchingStrategy>,
+    input: Res<ButtonInput<KeyCode>>,
+    mut local: Local<BatchingStep>,
+) {
+    if input.just_pressed(KeyCode::F10) {
+        if state.get() == BatchingStep::Pause {
+            info!("Resuming batching");
+            state.set(*local);
+        } else {
+            info!("Pausing batching");
+            *local = state.get();
+            state.set(BatchingStep::Pause);
+        }
+    }
+}
+
+/// This system is used to determine if we need to recalculate the batching groups.
+fn batching_huristinc(
+    _strategy: Res<BatchingStrategy>,
+    mut state: ResMut<Step>,
+    time: Res<Time<Real>>,
+    mut last: Local<u32>,
+) {
+    if *last != time.elapsed_secs() as u32 {
+        info!("Triggering batching recalculation");
+        *last = time.elapsed_secs() as u32;
+        state.set(BatchingStep::CalculateBatchs);
+    }
+}
+
+fn start_tick(
+    mut batch: ResMut<NextBatch>,
+    mut step: ResMut<Step>,
+    time: Res<Time<Real>>,
+    mut local: Local<(u8, u32)>,
+) {
+    if time.delta_secs_f64() > TARGET_TICKTIME {
+        warn!(
+            "Tick time is too high: {}s, skipping tick",
+            time.delta_secs()
+        );
+        return;
+    }
+    local.0 += 1;
+    if local.1 != time.elapsed_secs() as u32 {
+        local.1 = time.elapsed_secs() as u32;
+        info!("Ticks this sec: {}", local.0);
+        local.0 = 0;
+    }
+    step.set(BatchingStep::Run);
+}
+
+fn update_state(world: &mut World) {
+    world.run_schedule(StateTransition);
+}
+
+fn in_step(step: BatchingStep) -> impl Fn(Res<Step>) -> bool {
+    move |s: Res<Step>| s.0 == step
+}
+
+pub fn can_modify_next_step(s: Res<Step>) -> bool {
+    s.0 == BatchingStep::Done
+}
+
+pub fn can_modify_world(s: Res<Step>) -> bool {
+    s.0 == BatchingStep::Ready
+}
+
+pub fn can_fuck_with_next_step(s: Res<Step>) -> bool {
+    s.0 == BatchingStep::Pause
+}
+
+// struct NextStepRead<'w, 's> {
+//     query: Query<'w, 's, (&'w ChunkId, &'w Cells, &'w NextStep)>,
+// }
+
+// fn test_system(query: Query<(&ChunkId, &Cells, &NextStep)>) {
+//     for i in query.iter() {}
+// }
+
+// unsafe impl<'w, 's> bevy::ecs::system::SystemParam for NextStepRead<'w, 's> {
+//     type State = QueryState<(ChunkId, Cells, NextStep)>;
+
+//     // type Item<'world, 'state> = (&'world ChunkId, &'world Cells, &'world NextStep);
+
+//     fn init_state(
+//         world: &mut World,
+//         system_meta: &mut bevy::ecs::system::SystemMeta,
+//     ) -> Self::State {
+//         unsafe {
+//             system_meta
+//                 .component_access_set_mut()
+//                 .add_unfiltered_resource_read(world.register_resource::<Step>());
+//         }
+//         QueryState::new(world)
+//     }
+
+//     unsafe fn get_param<'world, 'state>(
+//         state: &'state mut Self::State,
+//         system_meta: &bevy::ecs::system::SystemMeta,
+//         world: bevy::ecs::world::unsafe_world_cell::UnsafeWorldCell<'world>,
+//         change_tick: bevy::ecs::component::Tick,
+//     ) -> Self::Item<'world, 'state> {
+//         todo!()
+//     }
+
+//     unsafe fn validate_param(
+//         state: &Self::State,
+//         system_meta: &bevy::ecs::system::SystemMeta,
+//         world: bevy::ecs::world::unsafe_world_cell::UnsafeWorldCell,
+//     ) -> std::result::Result<(), bevy::ecs::system::SystemParamValidationError> {
+//         unsafe {
+//             let Some(step) = world.get_resource::<Step>() else {
+//                 return Err(bevy::ecs::system::SystemParamValidationError::invalid(
+//                     "Failed to get Step resource",
+//                 ));
+//             };
+//             if step.0 != BatchingStep::Done {
+//                 return Err(bevy::ecs::system::SystemParamValidationError::new(
+//                     true,
+//                     "Cant access next if step is not done",
+//                     "BatchingStep != Done",
+//                 ));
+//             }
+//         };
+//         Ok(())
+//     }
+// }

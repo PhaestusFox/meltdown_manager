@@ -1,8 +1,10 @@
-pub type FixedNum = fixed::types::I23F9;
+pub type FixedNum = fixed::types::I25F7;
 
 pub const K_AT_20C: FixedNum = FixedNum::lit("293150");
 pub const ATM_1: FixedNum = FixedNum::lit("101.325");
 pub const STD_CHARGE: FixedNum = FixedNum::lit("0");
+
+use strum::IntoEnumIterator;
 
 use crate::voxels::blocks::Blocks;
 use crate::voxels::cellular_automata::cells::CellFlags;
@@ -17,7 +19,7 @@ impl CellData {
             energy: val,
             charge: val,
             presure: val,
-            flags: CellFlags::IS_GAS,
+            flags: CellFlags::all(),
         }
     }
 
@@ -79,15 +81,8 @@ impl BlockProperties {
         vaporization_energy: FixedNum::lit("1000.0"),
     };
 
-    pub const AIR: BlockProperties = BlockProperties {
-        heat_capacity: FixedNum::lit("10000.0"),
-        thermal_conductivity: FixedNum::lit("100"),
-
-        ..BlockProperties::DEFAULT
-    };
-
     pub const URANIUM: BlockProperties = BlockProperties {
-        heat: FixedNum::lit("222.0"),
+        heat: FixedNum::lit("10000.0"), // todo! drop to 10
         melting_point: FixedNum::lit("1405.3"),
 
         // Density: Very high, 19.1 g/cm3 --- 19100 kg/m3 --- 19.1 ton
@@ -137,6 +132,18 @@ impl BlockProperties {
 
         ..BlockProperties::DEFAULT
     };
+
+    pub const AIR: BlockProperties = BlockProperties {
+        heat: FixedNum::ZERO,
+        conductivity: FixedNum::lit("0.0257"),
+        mass: FixedNum::lit("0.001225"),
+        melting_point: FixedNum::ZERO,
+        boiling_point: FixedNum::lit("194.65"),
+        heat_capacity: FixedNum::lit("1005.0"),
+        thermal_conductivity: FixedNum::lit("0.0257"),
+        fusion_energy: FixedNum::ZERO,
+        vaporization_energy: FixedNum::ZERO,
+    };
 }
 // {
 //     type: Water,
@@ -150,3 +157,18 @@ impl BlockProperties {
 //     Molar heat capacity	75.385 J/(mol·K) ---  4188 J/(kg.K) --- 4188 J/K
 //     Thermal conductivity 0.6065 W/(m·K) ---                   --- 0.6065 W/K
 // }
+
+#[test]
+fn blocks_can_evaperation_energy() {
+    for block in Blocks::iter() {
+        println!("Block: {:?}", block);
+        let props = block.block_properties();
+        let fusion_energy = props.fusion_energy;
+        let vaporization_energy = props.vaporization_energy;
+        let energy_to_melt = props.melting_point * props.heat_capacity + fusion_energy;
+        println!("melt energy: {:?}", energy_to_melt);
+        let energy_to_evaporate =
+            props.boiling_point * props.heat_capacity + vaporization_energy + fusion_energy;
+        println!("evaporate energy: {:?}", energy_to_evaporate);
+    }
+}

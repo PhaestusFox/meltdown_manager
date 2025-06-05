@@ -35,6 +35,8 @@ fn spawn_test(
     let matterial_handle = asset_server.add(matterial);
     let mut chunk_count = 0;
     let mut total_voxels = 0;
+
+    // return;
     commands
         .spawn((
             Name::new("Chunks"),
@@ -44,12 +46,13 @@ fn spawn_test(
         .with_children(|root| {
             for x in -BX..=BX {
                 for z in -BZ..=BZ {
-                    for y in -BY..=BY + 1 {
+                    for y in -BY..=BY {
                         chunk_count += 1;
                         total_voxels += CHUNK_VOL;
                         root.spawn((
                             ChunkId::new(x, y, z),
                             Chunk::<CellData>::empty(),
+                            // Mesh3d(Default::default()),
                             generator.clone(),
                             MeshMaterial3d(matterial_handle.clone()),
                         ));
@@ -71,10 +74,20 @@ fn remove_evaluation(
     mut mesher: ResMut<phoxels::ChunkMesher>,
     mut chunks: Query<(Entity, &mut NextStep, &mut ChunkData)>,
 ) {
+    let mut removed = 0;
     for (entity, mut next, mut data) in &mut chunks {
         let mut update = false;
         for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
-            let cell = next.get_by_index_mut(Cells::index(x, y, z));
+            #[cfg(debug_assertions)]
+            let chunk = next
+                .borrow_mut()
+                .expect("NextStep has not run yet\n Should only run in Step::Done");
+            #[cfg(not(debug_assertions))]
+            let Some(chunk) = next.borrow_mut() else {
+                error!("Tried to remove gas from a chunk that has not run yet");
+                continue;
+            };
+            let cell = chunk.get_by_index_mut(Cells::index(x, y, z));
             if cell.block == Blocks::Void || cell.block == Blocks::Air {
                 continue;
             }
@@ -83,11 +96,14 @@ fn remove_evaluation(
                 cell.block = Blocks::Air;
                 cell.energy = FixedNum::ZERO;
                 update = true;
-                println!("Removing gas block at ({}, {}, {})", x, y, z);
+                removed += 1;
             };
         }
         if update {
             mesher.add_to_queue(entity);
         }
+    }
+    if removed > 0 {
+        println!("Removed {} blocks as gas", removed);
     }
 }

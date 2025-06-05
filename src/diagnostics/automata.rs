@@ -12,6 +12,8 @@ use bevy::{
     prelude::*,
 };
 
+use super::MaxValue;
+
 use crate::{
     diagnostics::{DiagnosticSettings, TabButton},
     voxels::{
@@ -367,19 +369,18 @@ use bevy::render::{render_resource::ShaderType, storage::ShaderStorageBuffer};
 use phoxels::core::VoxelMaterial;
 
 pub fn plugin(app: &mut App) {
-    app.init_non_send_resource::<MaxValue>()
-        .add_systems(
-            FixedPostUpdate,
-            (
-                add_diagnostics.run_if(run_add),
-                calculate_to_update.run_if(run_update),
-                remove_diagnostics.run_if(stop_diagnostics),
-            ),
-        )
-        .add_systems(Update, update_diagnostics)
-        .add_systems(FixedPostUpdate, update_max)
-        .add_systems(Update, update_tab)
-        .init_resource::<ToUpdate>();
+    app.add_systems(
+        FixedPostUpdate,
+        (
+            add_diagnostics.run_if(run_add),
+            calculate_to_update.run_if(run_update),
+            remove_diagnostics.run_if(stop_diagnostics),
+        ),
+    )
+    .add_systems(Update, update_diagnostics)
+    .add_systems(FixedPostUpdate, update_max)
+    .add_systems(Update, update_tab)
+    .init_resource::<ToUpdate>();
 
     app.add_systems(Startup, reg_tab)
         .init_resource::<TabState>();
@@ -399,59 +400,6 @@ fn run_update(state: Res<TabState>) -> bool {
 fn update_max(mut max: NonSendMut<MaxValue>) {
     max.restart();
     max.run();
-}
-
-pub struct MaxValue {
-    max: CellData,
-    channel: std::sync::mpsc::Receiver<CellData>,
-    sender: std::sync::mpsc::Sender<CellData>,
-}
-
-impl FromWorld for MaxValue {
-    fn from_world(_: &mut World) -> Self {
-        let (sender, channel) = std::sync::mpsc::channel();
-        MaxValue {
-            max: CellData {
-                block: crate::voxels::blocks::Blocks::Void,
-                energy: FixedNum::ONE,
-                presure: FixedNum::ONE,
-                charge: FixedNum::ONE,
-                flags: CellFlags::empty(),
-            },
-            channel,
-            sender,
-        }
-    }
-}
-
-impl MaxValue {
-    pub fn get_sender(&self) -> std::sync::mpsc::Sender<CellData> {
-        self.sender.clone()
-    }
-
-    fn get_max(&self) -> CellData {
-        self.max
-    }
-
-    fn restart(&mut self) {
-        self.max = CellData {
-            block: crate::voxels::blocks::Blocks::Void,
-            energy: FixedNum::ONE,
-            presure: FixedNum::ONE,
-            charge: FixedNum::ONE,
-            flags: CellFlags::empty(),
-        };
-    }
-
-    fn run(&mut self) {
-        loop {
-            if let Ok(data) = self.channel.try_recv() {
-                self.max.max(&data);
-            } else {
-                break;
-            }
-        }
-    }
 }
 
 fn stop_diagnostics(state: Res<TabState>) -> bool {

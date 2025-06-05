@@ -11,6 +11,8 @@ struct VertexOutput {
     @location(1) world_normal: vec3<f32>,
     @location(2) block_type: u32,
     @location(3) scale: vec3<f32>,
+    @location(4) vertex_normal: u32,
+    @location(5) chunk_pos: vec3<u32>,
 }
 
 struct FragmentOutput {
@@ -45,39 +47,39 @@ const r255: f32 = 1.0 / 255.0;
 fn fragment(
     in: VertexOutput,
 ) -> @location(0) vec4<f32> {
-    
+    let world_normal = normalize( cross( dpdy( in.world_position.xyz ), dpdx( in.world_position.xyz ) ) );
     var dp = 0.7;
 
-    if in.world_normal.y > 0.2 {
+    if world_normal.y > 0.2 {
         dp = 1.;
-    } else if in.world_normal.y < -0.2 {
+    } else if world_normal.y < -0.2 {
         dp = 0.5;
     } else {
-        if in.world_normal.x > 0.2 {
+        if world_normal.x > 0.2 {
             dp += 0.05;   
-        } else if in.world_normal.x < -0.2 {
+        } else if world_normal.x < -0.2 {
             dp -= 0.1;
         }
-        if in.world_normal.z > 0.2 {
+        if world_normal.z > 0.2 {
             dp += 0.1;
-        } else if in.world_normal.z < -0.2 {
+        } else if world_normal.z < -0.2 {
             dp -= 0.05;
         }
     }
 
     // back, left, right, top, bottom
     var face: u32 = 10;
-    if in.world_normal.x > 0.5 {
+    if world_normal.x > 0.5 {
         face = 15;
-    } else if in.world_normal.x < -0.5 {
+    } else if world_normal.x < -0.5 {
         face = 10;
-    } else if in.world_normal.y > 0.5 {
+    } else if world_normal.y > 0.5 {
         face = 5;
-    } else if in.world_normal.y < -0.5 {
+    } else if world_normal.y < -0.5 {
         face = 0;
-    } else if in.world_normal.z > 0.5 {
+    } else if world_normal.z > 0.5 {
         face = 20;
-    } else if in.world_normal.z < -0.5 {
+    } else if world_normal.z < -0.5 {
         face = 25;
     };
 
@@ -107,7 +109,7 @@ fn fragment(
 
     
     var axis: f32;
-    if abs(in.world_normal.y) < 0.5 {
+    if abs(world_normal.y) < 0.5 {
         axis = (in.world_position.y * in.scale.y) % 1;
     } else {
         axis = (in.world_position.z * in.scale.z) % 1;
@@ -117,7 +119,7 @@ fn fragment(
     }
     uvy -= (axis * texture_step.y);
     
-    if abs(in.world_normal.x) < 0.5 {
+    if abs(world_normal.x) < 0.5 {
         axis = (in.world_position.x * in.scale.x) % 1;
     } else {
         axis = (in.world_position.z * in.scale.z) % 1;
@@ -141,7 +143,8 @@ fn fragment(
     let ix = u32(fx);
     let iy = u32(fy);
     let iz = u32(fz);
-    let aindex = ix + iz * 30 + iy * 30 * 30;
+    let aindex = in.chunk_pos.x + in.chunk_pos.z * 30 + in.chunk_pos.y * 30 * 30;
+    // let aindex = ix + iz * 30 + iy * 30 * 30;
     let ai = aindex % 4;
 
     // if ix == 0 {
@@ -169,6 +172,20 @@ fn fragment(
     } else {
         adata = 0;
     }
+    var c = vec4(0., 0.,0., 1.);
+
+    if (in.vertex_normal & 1) == 0 {
+        c.r = 1;
+    }
+    if (in.vertex_normal & 2) > 0 {
+        c.g = 1;
+    }
+    if (in.vertex_normal & 4) > 0 {
+        c.b = 1;
+    }
+    if in.vertex_normal < 100 {
+        // return c;
+    }
     
 
     let temp = f32(adata & 0xFF) * r255;
@@ -180,6 +197,7 @@ fn fragment(
     var ts = textureSample(material_color_texture, material_color_sampler, vec2(uvx, uvy));
     let a = ts.a;
     ts = vec4(0);
+
     if (flags & (1<<9)) > 0 {
         if phase == 0 {
             ts.b = 1.;
@@ -201,6 +219,15 @@ fn fragment(
             ts.b = charge;
         }
     }
+
+    // ts = vec4<f32>(0.0);
+    
+    // if (in.vertex_normal & 4) > 0 {
+    //     ts.b = 1.;
+    // } else {
+    //     ts.b = 0.5;
+    // }
+
     ts *= dp * COLOR_MULTIPLIER;
     if a < 0.2 {
         discard;
@@ -240,10 +267,22 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let x = vertex.position & 31;
     let y = (vertex.position >> 5) & 31;
     let z = (vertex.position >> 10) & 31;
-    out.block_type = (vertex.position >> 15) & 131071;
+    out.block_type = (vertex.position >> 15) & 255;
+    let n = (vertex.position >> 23) & 7;
     var pos = vec3(f32(x), f32(y), f32(z));
-    pos += vec3(0.0001);
-    pos.y -= 0.0002;
+    // out.vertex_normal = vec3(0);
+    out.chunk_pos = vec3<u32>(x, y, z);
+    out.vertex_normal = n;
+    if (n & 4) > 0 { // is right face
+        out.chunk_pos.x -= 1;
+    }
+    if (n & 2) > 0 { // is top face
+        out.chunk_pos.y -= 1;
+    }
+    if (n & 1) == 0 {
+        out.chunk_pos.z -= 1;
+    }
+
 
 
     // calculate scale

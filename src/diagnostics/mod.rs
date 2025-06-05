@@ -8,22 +8,25 @@ use bevy::{
     input::mouse::AccumulatedMouseMotion,
     prelude::*,
 };
+#[cfg(not(target_arch = "wasm32"))]
 mod automata;
 mod chunk;
 mod entity;
 mod fps;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod shader;
 
-pub use automata::MaxValue;
+mod reporting;
+
 pub use chunk::ChunkCount;
+pub use reporting::MaxValue;
 pub struct MeltdownDiagnosticsPlugin;
 
 impl Plugin for MeltdownDiagnosticsPlugin {
     fn build(&self, app: &mut App) {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
-        app.add_plugins((fps::plugin, entity::plugin, chunk::plugin, automata::plugin))
-            .add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
+        app.add_plugins((fps::plugin, entity::plugin, chunk::plugin))
             .add_systems(Update, (toggle_window, on_click_tap))
             .add_systems(PostStartup, on_init)
             .add_systems(Update, tab_button_system)
@@ -33,6 +36,12 @@ impl Plugin for MeltdownDiagnosticsPlugin {
             // .add_observer(slider_hover)
             // .add_observer(slider_hover_refined);
             .add_systems(Update, slider_not_observer);
+        app.init_non_send_resource::<reporting::MaxValue>();
+
+        // web doesnt like my shaders
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_plugins(MaterialPlugin::<shader::DebugMaterial>::default())
+            .add_plugins(automata::plugin);
     }
 }
 

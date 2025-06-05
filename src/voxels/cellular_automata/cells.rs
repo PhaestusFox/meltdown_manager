@@ -36,6 +36,8 @@ pub struct BlockProperties {
 
 impl chunk_serde::Serialize for CellData {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
+        vec.push(self.block as u8);
+        vec.push(self.flags.bits());
         for byte in self.energy.to_be_bytes() {
             vec.push(byte);
         }
@@ -45,19 +47,17 @@ impl chunk_serde::Serialize for CellData {
         for byte in self.presure.to_be_bytes() {
             vec.push(byte);
         }
-        vec.push(self.block as u8);
-        vec.push(self.flags.bits());
         Ok(12)
     }
 
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         Ok((
             CellData {
-                block: Blocks::from_repr(slice[13]).unwrap_or(Blocks::Void),
-                energy: FixedNum::from_be_bytes(slice[0..4].try_into().unwrap()),
-                charge: FixedNum::from_be_bytes(slice[4..8].try_into().unwrap()),
-                presure: FixedNum::from_be_bytes(slice[8..12].try_into().unwrap()),
-                flags: CellFlags::from_bits_truncate(slice[14]),
+                block: Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void),
+                energy: FixedNum::from_be_bytes(slice[2..6].try_into().unwrap()),
+                charge: FixedNum::from_be_bytes(slice[6..10].try_into().unwrap()),
+                presure: FixedNum::from_be_bytes(slice[10..14].try_into().unwrap()),
+                flags: CellFlags::from_bits_truncate(slice[1]),
             },
             13,
         ))

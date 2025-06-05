@@ -4,32 +4,34 @@ use bevy::{
 };
 
 use crate::voxels::{blocks::Blocks, cellular_automata::CellData, map::ChunkData};
-const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE as i32;
+const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 pub type Cells = crate::voxels::Chunk<CellData>;
 
-#[derive(Component, DerefMut, Deref)]
-#[component(on_insert = Self::on_insert)]
-pub struct NextStep(pub(super) Cells);
+#[derive(Component)]
+pub struct NextStep {
+    pub has_run: bool,
+    pub(super) chunk: Cells,
+}
 
 impl Default for NextStep {
     fn default() -> Self {
-        NextStep(Cells::solid(CellData::THE_VOID))
+        NextStep {
+            has_run: false,
+            chunk: Cells::solid(CellData::THE_VOID),
+        }
     }
 }
 
 impl NextStep {
-    fn on_insert(
-        mut world: bevy::ecs::world::DeferredWorld,
-        ctx: bevy::ecs::component::HookContext,
-    ) {
-        let current = (*world
-            .get::<Cells>(ctx.entity)
-            .expect("NextStep is only add as required component"))
-        .clone();
-        world
-            .get_mut::<NextStep>(ctx.entity)
-            .expect("just inserted NextStep")
-            .0 = current;
+    /// this is so if I need I can find anyone touching the future state of a chunk
+    /// Returns `None` if the step has not been simulated.
+    /// If you changed it before it ran your change would be overwritten.
+    pub fn borrow_mut(&mut self) -> Option<&mut Cells> {
+        if !self.has_run {
+            None
+        } else {
+            Some(&mut self.chunk)
+        }
     }
 }
 

@@ -18,13 +18,19 @@ use super::cellular_automata::BlockProperties;
 #[repr(u8)]
 pub enum Blocks {
     #[default]
-    Void = 0,
+    Air = 0,
     Copper,
     Iron,
     Steel,
     Uranium,
-    Air,
     Water,
+    Void = 255,
+}
+
+impl std::fmt::Display for Blocks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
 }
 
 impl Blocks {
@@ -38,12 +44,6 @@ impl Blocks {
             Blocks::Air => BlockProperties::AIR,
             Blocks::Water => BlockProperties::WATER,
         }
-    }
-}
-
-impl From<BlockId> for Blocks {
-    fn from(id: BlockId) -> Self {
-        Blocks::from_repr(id.0).unwrap_or(Blocks::Void)
     }
 }
 
@@ -65,9 +65,9 @@ impl phoxels::prelude::Block for Blocks {
         *self as u8
     }
     fn is_solid(&self) -> bool {
-        true
+        !matches!(self, Blocks::Void | Blocks::Air)
     }
     fn is_transparent(&self) -> bool {
-        false
+        matches!(self, Blocks::Air | Blocks::Void)
     }
 }
