@@ -1658,6 +1658,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block_macro"
+version = "0.1.0"
+dependencies = [
+ "fixed",
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "blocking"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3487,6 +3496,7 @@ dependencies = [
  "bevy",
  "bevy_editor_pls",
  "bitflags 2.9.1",
+ "block_macro",
  "chunk_serde",
  "criterion",
  "fixed",
