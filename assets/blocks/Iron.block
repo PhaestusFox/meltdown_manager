@@ -1,0 +1,14 @@
+// all mass / volumes are in Per Voxel
+(
+    density:7874, // kg // 7.874 g/cm3 --- 7874 kg/m3
+    specific_heat:3537, // kJ/K 25.10 J/(mol·K) // 449.2 J/(kg.K)
+    thermal_conductivity:80400, // W/K * 1000 // 80.4 W/(m⋅K)
+    fusion_energy:1944878, // kJ 13.81 kJ/mol // 247 kJ/kg
+    melting_point:181100, // K * 100 // 1811 K ​(1538 °C, ​2800 °F)
+    vaporization_energy:0, // kJ 340 kJ/mol // 6.1 MJ/kg
+    boiling_point:313400 // K * 100 // 3134 K ​(2861 °C, ​5182 °F)
+)
+
+// type: Iron,
+// Molar Mass: 55.845
+// Mol/Kg: 17.92

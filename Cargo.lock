@@ -1658,7 +1658,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "block_macro"
+name = "block_meta"
 version = "0.1.0"
 dependencies = [
  "fixed",
@@ -3496,7 +3496,7 @@ dependencies = [
  "bevy",
  "bevy_editor_pls",
  "bitflags 2.9.1",
- "block_macro",
+ "block_meta",
  "chunk_serde",
  "criterion",
  "fixed",

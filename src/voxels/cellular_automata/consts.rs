@@ -1,9 +1,22 @@
 pub type FixedNum = fixed::types::I25F7;
 
-pub const K_AT_20C: FixedNum = FixedNum::lit("293150");
+pub const AIR_AT_20C: (FixedNum, CellFlags) = get_e_at_k(Blocks::Air, FixedNum::lit("293.15"));
 pub const ATM_1: FixedNum = FixedNum::lit("101.325");
 pub const STD_CHARGE: FixedNum = FixedNum::lit("0");
 
+pub const fn get_e_at_k(block: Blocks, k: FixedNum) -> (FixedNum, CellFlags) {
+    let props = block.properties();
+    let f = if k.to_bits() > props.boiling_point.to_bits() {
+        CellFlags::IS_GAS
+    } else if k.to_bits() > props.melting_point.to_bits() {
+        CellFlags::IS_LIQUID
+    } else {
+        CellFlags::empty()
+    };
+    (k.saturating_mul(props.specific_heat), f)
+}
+
+use fixed::traits::Fixed;
 use strum::IntoEnumIterator;
 
 use crate::voxels::blocks::Blocks;
@@ -12,49 +25,6 @@ use crate::voxels::cellular_automata::cells::CellFlags;
 use super::BlockProperties;
 
 use super::CellData;
-impl CellData {
-    pub const fn all(val: FixedNum) -> Self {
-        CellData {
-            block: Blocks::Void,
-            energy: val,
-            charge: val,
-            presure: val,
-            flags: CellFlags::all(),
-        }
-    }
-
-    pub const THE_VOID: CellData = CellData {
-        block: Blocks::Void,
-        energy: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
-        flags: CellFlags::IS_GAS,
-    };
-
-    pub const MIN: CellData = CellData {
-        block: Blocks::Void,
-        energy: FixedNum::MIN,
-        charge: FixedNum::MIN,
-        presure: FixedNum::MIN,
-        flags: CellFlags::empty(),
-    };
-
-    pub const MAX: CellData = CellData {
-        block: Blocks::Void,
-        energy: FixedNum::MAX,
-        charge: FixedNum::MAX,
-        presure: FixedNum::MAX,
-        flags: CellFlags::IS_GAS,
-    };
-
-    pub const ZERO: CellData = CellData {
-        block: Blocks::Void,
-        energy: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
-        flags: CellFlags::empty(),
-    };
-}
 
 impl BlockProperties {
     pub const VOID: BlockProperties = BlockProperties {
@@ -162,13 +132,13 @@ impl BlockProperties {
 fn blocks_can_evaperation_energy() {
     for block in Blocks::iter() {
         println!("Block: {:?}", block);
-        let props = block.block_properties();
+        let props = block.properties();
         let fusion_energy = props.fusion_energy;
         let vaporization_energy = props.vaporization_energy;
-        let energy_to_melt = props.melting_point * props.heat_capacity + fusion_energy;
+        let energy_to_melt = props.melting_point * props.specific_heat + fusion_energy;
         println!("melt energy: {:?}", energy_to_melt);
         let energy_to_evaporate =
-            props.boiling_point * props.heat_capacity + vaporization_energy + fusion_energy;
+            props.boiling_point * props.specific_heat + vaporization_energy + fusion_energy;
         println!("evaporate energy: {:?}", energy_to_evaporate);
     }
 }

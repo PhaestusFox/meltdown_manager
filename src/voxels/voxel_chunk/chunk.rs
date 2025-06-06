@@ -3,7 +3,7 @@ use chunk_serde::CompressedChunkData;
 
 use crate::voxels::{
     blocks::Blocks,
-    cellular_automata::CellData,
+    cellular_automata::{CellData, NextStep},
     map::{CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, ChunkData},
 };
 
@@ -403,7 +403,7 @@ impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
     }
 }
 
-#[derive(Component, Default, Debug)]
+#[derive(Component, Debug, Default)]
 pub struct Neighbours {
     up: Option<Entity>,
     down: Option<Entity>,
@@ -411,6 +411,22 @@ pub struct Neighbours {
     right: Option<Entity>,
     front: Option<Entity>,
     back: Option<Entity>,
+}
+
+#[derive(Resource)]
+pub struct VoidNeighbours(pub [Entity; 6]);
+
+impl FromWorld for VoidNeighbours {
+    fn from_world(world: &mut World) -> Self {
+        VoidNeighbours([
+            world.spawn(NextStep::default()).id(),
+            world.spawn(NextStep::default()).id(),
+            world.spawn(NextStep::default()).id(),
+            world.spawn(NextStep::default()).id(),
+            world.spawn(NextStep::default()).id(),
+            world.spawn(NextStep::default()).id(),
+        ])
+    }
 }
 
 struct EmptyNeighboursIter<'a> {

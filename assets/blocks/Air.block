@@ -1,0 +1,14 @@
+// all mass / volumes are in Per Voxel
+(
+    density:1, // kg
+    specific_heat:1, // kJ/K // 29.124 J/(mol·K)
+    thermal_conductivity:24, // W/K * 1000 // 0.024 W/(m⋅K)
+    fusion_energy:27, // kJ 0.72 kJ/mol
+    melting_point:6323, // K * 100 63.23[3] K ​(−209.86[3] °C, ​−345.75[3] °F)
+    vaporization_energy:200, // kJ 5.57 kJ/mol
+    boiling_point: 7735, // K * 100 77.355 K ​(−195.795 °C, ​−320.431 °F)
+)
+
+// type: Air: N2
+// Molar Mass: 28.02
+// Mol/Kg: 35.7

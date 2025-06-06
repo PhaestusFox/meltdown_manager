@@ -171,22 +171,7 @@ fn fragment(
         adata = autos.block_d;
     } else {
         adata = 0;
-    }
-    var c = vec4(0., 0.,0., 1.);
-
-    if (in.vertex_normal & 1) == 0 {
-        c.r = 1;
-    }
-    if (in.vertex_normal & 2) > 0 {
-        c.g = 1;
-    }
-    if (in.vertex_normal & 4) > 0 {
-        c.b = 1;
-    }
-    if in.vertex_normal < 100 {
-        // return c;
-    }
-    
+    }    
 
     let temp = f32(adata & 0xFF) * r255;
     let presh = f32((adata >> 8) & 0xFF) * r255;

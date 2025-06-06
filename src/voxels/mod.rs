@@ -88,12 +88,12 @@ fn remove_evaluation(
                 continue;
             };
             let cell = chunk.get_by_index_mut(Cells::index(x, y, z));
-            if cell.block == Blocks::Void || cell.block == Blocks::Air {
+            if cell.get_block() == Blocks::Void || cell.get_block() == Blocks::Air {
                 continue;
             }
             if cell.flags.contains(CellFlags::IS_GAS) {
                 data.set_block(x as u32, y as u32, z as u32, Blocks::Air);
-                cell.block = Blocks::Air;
+                cell.set_block(Blocks::Air);
                 cell.energy = FixedNum::ZERO;
                 update = true;
                 removed += 1;

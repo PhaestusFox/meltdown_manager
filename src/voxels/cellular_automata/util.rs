@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::world::Mut,
     math::IVec3,
     prelude::{Component, Deref, DerefMut},
 };
@@ -35,7 +36,7 @@ impl NextStep {
     }
 }
 
-#[derive(Clone, Copy, Deref, DerefMut, Debug)]
+#[derive(Clone, Copy, Deref, DerefMut, Debug, PartialEq, Eq, Hash)]
 pub struct CellId(IVec3);
 
 pub struct CellNeighbourIter(CellId, u8);
@@ -62,12 +63,19 @@ impl Iterator for CellNeighbourIter {
 }
 
 impl CellId {
-    fn new(x: i32, y: i32, z: i32) -> Self {
+    pub fn new(x: i32, y: i32, z: i32) -> Self {
         CellId(IVec3::new(x, y, z))
     }
 
     pub fn neighbours(&self) -> impl Iterator<Item = CellId> {
         CellNeighbourIter(*self, 0)
+    }
+
+    pub fn down(&self) -> CellId {
+        CellId::new(self.0.x, self.0.y - 1, self.0.z)
+    }
+    pub fn up(&self) -> CellId {
+        CellId::new(self.0.x, self.0.y + 1, self.0.z)
     }
 }
 
@@ -227,5 +235,64 @@ impl<'a> ChunkGared<'a> {
 
     fn get_chunk(&self, index: GaredIndex) -> Option<&'a Cells> {
         self.chunk[index.to_index()]
+    }
+}
+
+pub struct MutChunkGared<'a> {
+    chunk: [Option<Mut<'a, Cells>>; 7],
+}
+
+impl<'a> MutChunkGared<'a> {
+    pub fn new(chunks: [Option<Mut<'a, Cells>>; 7]) -> Self {
+        MutChunkGared { chunk: chunks }
+    }
+
+    pub fn get(&self, id: CellId) -> CellData {
+        let index = GaredIndex::from_id(id);
+        let normalized_id = index.normalize_id(id);
+        let Some(chunk) = self.get_chunk(index) else {
+            return CellData::THE_VOID;
+        };
+        let index = Cells::index(normalized_id.x, normalized_id.y, normalized_id.z);
+        chunk.get_by_index(index)
+    }
+
+    pub fn set(&mut self, id: CellId, data: CellData) {
+        let index = GaredIndex::from_id(id);
+        let normalized_id = index.normalize_id(id);
+        let Some(chunk) = self.get_chunk_mut(index) else {
+            return;
+        };
+        let index = Cells::index(normalized_id.x, normalized_id.y, normalized_id.z);
+        chunk.set_by_index(index, data);
+    }
+
+    fn get_chunk_mut<'b>(&'b mut self, index: GaredIndex) -> Option<&'b mut Cells>
+    where
+        'a: 'b,
+    {
+        match self.chunk.get_mut(index.to_index()) {
+            Some(Some(c)) => Some(c),
+            _ => None,
+        }
+    }
+
+    fn get_chunk(&'a self, index: GaredIndex) -> Option<&'a Cells> {
+        self.chunk
+            .get(index.to_index())
+            .and_then(|c| c.as_ref().map(|c| &**c))
+    }
+
+    pub fn swap<'b>(&'b mut self, a: CellId, b: CellId)
+    where
+        'a: 'b,
+    {
+        let a_index = self.get(a);
+        let b_index = self.get(b);
+        if a_index.get_block() == Blocks::Void || b_index.get_block() == Blocks::Void {
+            return;
+        }
+        self.set(a, b_index);
+        self.set(b, a_index);
     }
 }

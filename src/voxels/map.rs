@@ -94,7 +94,7 @@ pub fn map_plugin(app: &mut App) {
                 .get_mut::<Cells>(ctx.entity)
                 .expect("Cells is required Component");
             for (i, block) in blocks.into_iter().enumerate() {
-                chunk.get_by_index_mut(i).block = block;
+                chunk.get_by_index_mut(i).set_block(block);
             }
         });
     app.add_systems(

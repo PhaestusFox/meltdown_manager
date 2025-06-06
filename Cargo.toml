@@ -17,6 +17,7 @@ chunk_serde = {path = "crates/chunk_serde"}
 noise = "*"
 bitflags = "*"
 bevy = {version = "0.16"}
+block_meta = {path = "crates/block_macro"}
 
 [features]
 # default = []

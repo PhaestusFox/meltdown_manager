@@ -1,0 +1,12 @@
+// all mass / volumes are in Per Voxel
+(
+    density:7850, // kg
+    specific_heat:3611, // kJ/K 460 J/(kg.K)
+    thermal_conductivity:42500, // W/K * 1000 // 42.5 W/(m⋅K)
+    fusion_energy:1944878, // kJ //see Iron.block
+    melting_point:168900, // K * 100 // 1,689.15 K 1416°C (2580°F).
+    vaporization_energy:0, // kJ // 
+    boiling_point:313400 // K * 100 // 
+)
+
+// type: Steel: 4140

@@ -6,11 +6,10 @@ use super::FixedNum;
 use super::*;
 use bevy::prelude::*;
 use chunk_serde::BinSerializer;
-const TWO: FixedNum = FixedNum::lit("2.0");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellData {
-    pub block: Blocks,
+    block: Blocks,
     pub energy: FixedNum,
     pub charge: FixedNum,
     pub presure: FixedNum,
@@ -108,15 +107,37 @@ impl Default for CellData {
     fn default() -> Self {
         CellData {
             block: Blocks::Air,
-            energy: K_AT_20C,
+            energy: AIR_AT_20C.0,
             presure: ATM_1,
             charge: STD_CHARGE,
-            flags: CellFlags::empty(),
+            flags: AIR_AT_20C.1,
         }
     }
 }
 
 impl CellData {
+    pub const fn at_k(block: Blocks, k: FixedNum) -> CellData {
+        let at = get_e_at_k(block, k);
+        CellData {
+            block,
+            energy: at.0,
+            charge: FixedNum::ZERO,
+            presure: ATM_1,
+            flags: at.1,
+        }
+    }
+
+    pub fn set_block(&mut self, block: Blocks) {
+        let new = get_e_at_k(block, self.temperature());
+        self.energy = new.0;
+        self.flags = new.1;
+        self.block = block;
+    }
+
+    pub fn get_block(&self) -> Blocks {
+        self.block
+    }
+
     pub fn min(&mut self, other: &Self) {
         self.energy = self.energy.min(other.energy);
         self.charge = self.charge.min(other.charge);
@@ -133,20 +154,14 @@ impl CellData {
         self.energy.is_zero() | self.charge.is_zero() | self.presure.is_zero()
     }
 
-    pub fn normalize(&self, range: CellData) -> CellData {
+    pub fn normalize(&self, range: FixedNum) -> CellData {
         let mut out = *self;
-        if range.energy != FixedNum::ZERO {
-            out.energy /= range.energy;
-            out.energy = out.energy.clamp(FixedNum::ZERO, FixedNum::ONE);
-        }
-        if range.charge != FixedNum::ZERO {
-            out.charge /= range.charge;
-            out.charge = out.charge.clamp(FixedNum::ZERO, FixedNum::ONE);
-        }
-        if range.presure != FixedNum::ZERO {
-            out.presure /= range.presure;
-            out.presure = out.presure.clamp(FixedNum::ZERO, FixedNum::ONE);
-        }
+        out.energy /= range;
+        out.energy = out.energy.clamp(FixedNum::ZERO, FixedNum::ONE);
+        out.charge /= range;
+        out.charge = out.charge.clamp(FixedNum::ZERO, FixedNum::ONE);
+        out.presure /= range;
+        out.presure = out.presure.clamp(FixedNum::ZERO, FixedNum::ONE);
         out
     }
 }
@@ -259,45 +274,25 @@ impl<T: fixed::traits::ToFixed> Div<T> for CellData {
 
 impl CellData {
     pub fn temperature(&self) -> FixedNum {
-        let melting_loss = self.block.block_properties().fusion_energy;
-        let boiling_loss = self.block.block_properties().vaporization_energy;
-        if self.flags.contains(CellFlags::IS_GAS) {
-            (self.energy - melting_loss - boiling_loss)
-                / self.block.block_properties().heat_capacity
-        } else if self.flags.contains(CellFlags::IS_LIQUID) {
-            (self.energy - melting_loss) / self.block.block_properties().heat_capacity
-        } else {
-            self.energy / self.block.block_properties().heat_capacity
-        }
+        let meta = self.block.meta();
+        self.energy / meta.properties.specific_heat
     }
 
     pub fn set_phase(&mut self) {
-        let melting_loss = self.block.block_properties().fusion_energy;
-        let boiling_loss = self.block.block_properties().vaporization_energy;
-
-        let temp_after_melting =
-            (self.energy - melting_loss) / self.block.block_properties().heat_capacity;
-        let temp_after_boiling = (self.energy - boiling_loss - melting_loss)
-            / self.block.block_properties().heat_capacity;
-
-        if temp_after_boiling > self.block.block_properties().boiling_point {
-            self.flags.insert(CellFlags::IS_GAS);
-            self.flags.remove(CellFlags::IS_LIQUID);
-        } else if temp_after_melting > self.block.block_properties().melting_point {
-            self.flags.insert(CellFlags::IS_LIQUID);
-            self.flags.remove(CellFlags::IS_GAS);
+        if self.temperature() > self.block.properties().boiling_point {
+            self.flags.set(CellFlags::IS_GAS, true);
+            self.flags.set(CellFlags::IS_LIQUID, false);
+        } else if self.temperature() > self.block.properties().melting_point {
+            self.flags.set(CellFlags::IS_LIQUID, true);
+            self.flags.set(CellFlags::IS_GAS, false);
         } else {
-            self.flags.remove(CellFlags::IS_LIQUID | CellFlags::IS_GAS);
+            self.flags
+                .set(CellFlags::IS_GAS | CellFlags::IS_LIQUID, false);
         }
     }
 
     pub fn lookup_g(&self, block: Blocks) -> FixedNum {
-        if block == self.block {
-            return self.block.block_properties().thermal_conductivity;
-        }
-        // turn this into a lookup table
-        TWO / (FixedNum::ONE / self.block.block_properties().thermal_conductivity
-            + FixedNum::ONE / block.block_properties().thermal_conductivity)
+        self.block.meta().conductivity(block as u8)
     }
 }
 
@@ -306,5 +301,183 @@ bitflags::bitflags! {
     pub struct CellFlags: u8 {
         const IS_LIQUID = 0b00000001;
         const IS_GAS = 0b00000010;
+        const SINK = 0b00000100;
+        const FLOAT = 0b00001000;
     }
 }
+impl CellData {
+    pub const fn all(val: FixedNum) -> Self {
+        CellData {
+            block: Blocks::Void,
+            energy: val,
+            charge: val,
+            presure: val,
+            flags: CellFlags::all(),
+        }
+    }
+
+    pub const THE_VOID: CellData = CellData {
+        block: Blocks::Void,
+        energy: FixedNum::ZERO,
+        charge: FixedNum::ZERO,
+        presure: FixedNum::ZERO,
+        flags: CellFlags::IS_GAS,
+    };
+
+    pub const MIN: CellData = CellData {
+        block: Blocks::Void,
+        energy: FixedNum::MIN,
+        charge: FixedNum::MIN,
+        presure: FixedNum::MIN,
+        flags: CellFlags::empty(),
+    };
+
+    pub const MAX: CellData = CellData {
+        block: Blocks::Void,
+        energy: FixedNum::MAX,
+        charge: FixedNum::MAX,
+        presure: FixedNum::MAX,
+        flags: CellFlags::IS_GAS,
+    };
+
+    pub const ZERO: CellData = CellData {
+        block: Blocks::Void,
+        energy: FixedNum::ZERO,
+        charge: FixedNum::ZERO,
+        presure: FixedNum::ZERO,
+        flags: CellFlags::empty(),
+    };
+}
+// #[test]
+// mod test {
+//     use chunk_serde::CompressedChunkData;
+
+//     use crate::{
+//         utils::BlockIter,
+//         voxels::{Chunk, blocks::Blocks, map::CHUNK_VOL},
+//     };
+
+//     #[test]
+//     fn compress_automita() {
+//         use super::cellular_automata::{CellData, FixedNum};
+//         let mut comp = CompressedChunkData::Error(69);
+
+//         macro_rules! test {
+//             ($generator:expr) => {
+//                 comp = $generator.compress();
+//                 assert_eq!(Chunk::<CellData>::decompress(&comp), $generator);
+//             };
+//             ($generator:expr, $expect:expr) => {
+//                 comp = $generator.compress();
+//                 assert_eq!(comp, $expect);
+//             };
+//         }
+
+//         let mut chunk = Chunk::<CellData>::empty();
+
+//         // test back and forth
+//         test!(chunk);
+//         // test empty compress to Solid
+//         test!(chunk, CompressedChunkData::Solid(CellData::default()));
+
+//         let dummy = CellData {
+//             block: Blocks::Void,
+//             energy: FixedNum::from_num(69.42),
+//             presure: FixedNum::from_num(420),
+//             charge: FixedNum::from_num(4.2),
+//             flags: Default::default(),
+//         };
+//         chunk.set_block(0, 0, 0, dummy);
+//         // test changing 0,0,0 compress to RLE
+//         test!(chunk);
+//         test!(
+//             chunk,
+//             CompressedChunkData::RunLen(vec![
+//                 (dummy, 1),
+//                 (CellData::default(), (CHUNK_VOL - 1) as u16)
+//             ])
+//         );
+
+//         // test worse case for RLE
+//         let mut raw = vec![CellData::default(); CHUNK_VOL];
+//         // set every other block copper
+//         for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+//             raw[Chunk::<CellData>::index(x, y, z)] = dummy;
+//             chunk.set_block(x, y, z, dummy);
+//         }
+
+//         test!(chunk);
+//         test!(chunk, CompressedChunkData::Raw(raw));
+//     }
+//     #[test]
+//     fn fuzz_cell_compression() {
+//         use super::cellular_automata::{CellData, FixedNum};
+//         let mut rng = rand::thread_rng();
+
+//         let mut chunk = Chunk::<CellData>::empty();
+
+//         let div = FixedNum::from_num(100.);
+//         for _ in 0..27000 {
+//             let x = rng.random_range(0..10000);
+//             let y = rng.random_range(0..10000);
+//             let z = rng.random_range(0..10000);
+//             chunk.set_block(
+//                 rng.random_range(0..30),
+//                 rng.random_range(0..30),
+//                 rng.random_range(0..30),
+//                 CellData {
+//                     block: Blocks::Void,
+//                     energy: FixedNum::from_num(x) / div,
+//                     charge: FixedNum::from_num(y) / div,
+//                     presure: FixedNum::from_num(z) / div,
+//                     flags: Default::default(),
+//                 },
+//             );
+//             let comp = chunk.compress();
+//             assert_eq!(Chunk::decompress(&comp), chunk);
+//         }
+//     }
+
+//     #[test]
+//     fn fuzz_cell_serde() {
+//         use super::cellular_automata::{CellData, FixedNum};
+//         let mut chunk = Chunk::empty();
+//         let mut rng = rand::thread_rng();
+
+//         use chunk_serde::Serialize;
+//         let mut data = BinSerializer::new();
+//         let mut out = CompressedChunkData::Error(69);
+//         let mut comp = chunk.compress();
+//         let mut len = 0;
+
+//         macro_rules! test {
+//             ($generator:expr) => {
+//                 data.clear();
+//                 comp = $generator.compress();
+//                 data.insert(&comp);
+//                 (out, len) = CompressedChunkData::extract(data.as_ref()).unwrap();
+//                 assert_eq!(len, data.len());
+//                 assert_eq!(out, comp);
+//             };
+//         }
+//         let div = FixedNum::from_num(100.);
+//         for _ in 0..27000 {
+//             let x = rng.random_range(0..10000);
+//             let y = rng.random_range(0..10000);
+//             let z = rng.random_range(0..10000);
+//             chunk.set_block(
+//                 rng.random_range(0..30),
+//                 rng.random_range(0..30),
+//                 rng.random_range(0..30),
+//                 CellData {
+//                     block: Blocks::Void,
+//                     energy: FixedNum::from_num(x) / div,
+//                     charge: FixedNum::from_num(y) / div,
+//                     presure: FixedNum::from_num(z) / div,
+//                     flags: Default::default(),
+//                 },
+//             );
+//             test!(chunk);
+//         }
+//     }
+// }

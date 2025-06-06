@@ -1,0 +1,10 @@
+// all mass / volumes are in Per Voxel
+(
+    density:0, // kg
+    specific_heat:0, // kJ/K
+    thermal_conductivity:0, // W/K * 10
+    fusion_energy:0, // kJ
+    melting_point:0, // K * 100
+    vaporization_energy:0, // kJ
+    boiling_point:0 // K * 100
+)

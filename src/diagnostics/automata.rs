@@ -18,6 +18,7 @@ use crate::{
     diagnostics::{DiagnosticSettings, TabButton},
     voxels::{
         ChunkId, NeighbourDirection,
+        blocks::Blocks,
         cellular_automata::{CellData, CellFlags, Cells},
     },
 };
@@ -398,7 +399,6 @@ fn run_update(state: Res<TabState>) -> bool {
 }
 
 fn update_max(mut max: NonSendMut<MaxValue>) {
-    max.restart();
     max.run();
 }
 
@@ -816,7 +816,7 @@ const ONE_HUNDRED: FixedNum = FixedNum::lit("100.0");
 const ONE: FixedNum = FixedNum::ONE;
 const U8: FixedNum = FixedNum::lit("255.0");
 
-fn extract_component(item: &Cells, max: CellData) -> AutomitaDiagnosticChunk {
+fn extract_component(item: &Cells, max: FixedNum) -> AutomitaDiagnosticChunk {
     let mut chunk = AutomitaDiagnosticChunk {
         blocks: [Data::ZERO; CHUNK_VOL / 4],
         // blocks: 0.,
@@ -890,21 +890,14 @@ fn remove_diagnostics(
 
 fn dummy_diagnostics() -> AutomitaDiagnosticChunk {
     let mut chunk = Cells::solid(CellData::THE_VOID);
+    let mut dummmy = CellData::default();
     for (x, y, z) in BlockIter::<30, 30, 30>::new() {
-        chunk.set_block(
-            x,
-            y,
-            z,
-            CellData {
-                block: crate::voxels::blocks::Blocks::Void,
-                energy: FixedNum::from_num(8 * x),
-                charge: FixedNum::from_num(8 * y),
-                presure: FixedNum::from_num(8 * z),
-                flags: CellFlags::empty(),
-            },
-        );
+        dummmy.energy = FixedNum::from_num(8 * x);
+        dummmy.charge = FixedNum::from_num(8 * y);
+        dummmy.presure = FixedNum::from_num(8 * z);
+        chunk.set_block(x, y, z, dummmy);
     }
-    extract_component(&chunk, CellData::all(U8))
+    extract_component(&chunk, U8)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

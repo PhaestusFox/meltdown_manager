@@ -1,12 +1,14 @@
-{
-    type: Water,
-    Molar Mass: 18
-    Melting Point: 273.15 K ​(0.0 °C,  °F)
-    Electrical Conductivity: 
-    Heat of fusion 333 J/g --- 333000000J
-    Heat of vaporization 2257 J/g --- 2257000000J
-    Boiling point 373.13 K ​(100 °C,  °F)
-    Density: 1 g/cm3 --- 1000 kg/m3 --- 1 u/vox
-    Molar heat capacity	75.385 J/(mol·K) ---  4188 J/(kg.K) --- 4188 J/K
-    Thermal conductivity 0.6065 W/(m·K) ---                   --- 0.6065 W/K
-}
+// all mass / volumes are in Per Voxel
+(
+    density:1000, // kg // 1000 kg/m3
+    specific_heat:4180, // kJ/K / 1000 // 75.385 J/(mol·K) ---  4188 J/(kg.K)
+    thermal_conductivity:606, // W/K * 1000 // 0.6065 W/(m·K)
+    fusion_energy:333000, // kJ // 333 J/g
+    melting_point:27315, // K*100 // 273.15 K ​(0 °C,  °F)
+    vaporization_energy:2257000, // kJ // 2257 J/g
+    boiling_point:37315, // K*100 373.15 K K ​(100 °C, 0 °F)
+)
+
+// type: water,
+// Molar Mass: 18
+// Mol/Kg: 55.55

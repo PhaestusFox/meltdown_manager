@@ -14,6 +14,7 @@ use super::cellular_automata::BlockProperties;
     strum_macros::FromRepr,
     Default,
     strum_macros::EnumCount,
+    strum_macros::AsRefStr,
 )]
 #[repr(u8)]
 pub enum Blocks {
@@ -24,7 +25,7 @@ pub enum Blocks {
     Steel,
     Uranium,
     Water,
-    Void = 255,
+    Void,
 }
 
 impl std::fmt::Display for Blocks {
@@ -34,16 +35,12 @@ impl std::fmt::Display for Blocks {
 }
 
 impl Blocks {
-    pub const fn block_properties(&self) -> BlockProperties {
-        match self {
-            Blocks::Void => BlockProperties::VOID,
-            Blocks::Copper => BlockProperties::COPPER,
-            Blocks::Iron => BlockProperties::DEFAULT,
-            Blocks::Steel => BlockProperties::DEFAULT,
-            Blocks::Uranium => BlockProperties::URANIUM,
-            Blocks::Air => BlockProperties::AIR,
-            Blocks::Water => BlockProperties::WATER,
-        }
+    pub const fn properties(&self) -> &'static block_meta::properties::BlockProperties {
+        block_meta::block_properties(*self as u8)
+    }
+
+    pub const fn meta(&self) -> &'static block_meta::computed::BlockMeta {
+        block_meta::block_meta(*self as u8)
     }
 }
 

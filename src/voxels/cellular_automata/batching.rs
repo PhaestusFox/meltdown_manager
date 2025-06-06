@@ -1,12 +1,22 @@
 use std::{ops::DerefMut, time::Instant};
 
-use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*};
+use bevy::{
+    diagnostic::DiagnosticsStore,
+    ecs::{entity::EntityIndexSet, entity_disabling, schedule::ScheduleLabel},
+    prelude::*,
+};
+use bitflags::Flags;
 
 use crate::{
     TARGET_TICKTIME,
     diagnostics::ChunkCount,
     utils::BlockIter,
-    voxels::{Chunk, ChunkId, Neighbours, blocks::Blocks, cellular_automata::*, map::ChunkData},
+    voxels::{
+        Chunk, ChunkId, Neighbours,
+        blocks::Blocks,
+        cellular_automata::*,
+        map::{CHUNK_SIZE, ChunkData},
+    },
 };
 
 #[derive(States, Clone, Copy, Debug, Hash, Eq, Default)]
@@ -154,8 +164,6 @@ pub fn plugin(app: &mut App) {
         .register_required_components::<Cells, NextStep>() // make sure Cells always has NextStep
         // If we are out of time for a tick, we force finish it in one frame --- makes Step = Done
         .add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)))
-        // If tick it finished, we update the state of the world --- makes Step = Ready
-        .add_systems(PreUpdate, set_prev.run_if(in_step(BatchingStep::Done)))
         // If Step = Run, we run a batch of the simulation --- Sets Step = Done if all batches are finished
         // This must be in Update to maximize performance -- Because it will run with most of the rest of the game
         .add_systems(Update, run_batch.run_if(in_step(BatchingStep::Run)))
@@ -182,15 +190,32 @@ pub fn plugin(app: &mut App) {
         Update,
         start_ticking.run_if(in_step(BatchingStep::SetupWorld)),
     );
+    // If tick it finished, we update the state of the world --- makes Step = Ready
+    app.configure_sets(
+        Update,
+        (ApplyStep::PreApply, ApplyStep::Apply, ApplyStep::PostApply)
+            .after(run_batch)
+            .chain()
+            .run_if(in_step(BatchingStep::Done)),
+    );
+
+    app.add_systems(Update, set_prev.in_set(ApplyStep::Apply));
+
+    app.add_systems(
+        Update,
+        apply_physics
+            .in_set(ApplyStep::PostApply)
+            .run_if(logic::is_step(logic::Steps::GRAVITY)),
+    );
 
     app.add_systems(Update, toggle_pause);
+    app.add_systems(Update, update_meshs.after(ApplyStep::PostApply));
 }
 
 fn set_prev(
     mut chunks: Query<(Entity, &mut Cells, &mut NextStep)>,
     mut state: ResMut<Step>,
     mut batch: ResMut<NextBatch>,
-
     strategy: Res<BatchingStrategy>,
 ) {
     for (entity, mut chunk, mut next) in &mut chunks {
@@ -200,7 +225,7 @@ fn set_prev(
         }
         assert!(next.has_run);
         next.has_run = false;
-        std::mem::swap(chunk.as_mut(), &mut next.chunk);
+        std::mem::swap(chunk.bypass_change_detection(), &mut next.chunk);
     }
     batch.reset();
     state.set(BatchingStep::Ready);
@@ -262,14 +287,9 @@ fn force_finish(
     mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
     mut next_state: ResMut<Step>,
     mut next_batch: ResMut<NextBatch>,
+    tick: Res<VoxelTick>,
 ) {
-    let mut finishing = Vec::with_capacity(strategy.len());
-    println!(
-        "Forcing finish of batching groups, running {} batches",
-        next_batch.get()
-    );
-    for (i, finish) in strategy.batchs().enumerate().skip(next_batch.get()) {
-        // let start = Instant::now();
+    for finish in strategy.batchs().skip(next_batch.get()) {
         next_batch.take();
         new_state
             .par_iter_many_unique_mut(finish)
@@ -283,16 +303,14 @@ fn force_finish(
                         chunks[i as usize + 1] = Some(neighbour);
                     }
                 }
-                super::step(ChunkIter::new(&mut chunk.chunk), ChunkGared::new(chunks));
+                super::step(
+                    ChunkIter::new(&mut chunk.chunk),
+                    ChunkGared::new(chunks),
+                    tick.get(),
+                );
                 chunk.has_run = true;
             });
-        finishing.push(i);
-        // println!("Finished batch{b} in {}us", start.elapsed().as_micros());
     }
-    warn!(
-        "Failed to finish batching, forcing finish Batchs({:?}) frame",
-        finishing
-    );
 
     next_state.set(BatchingStep::Done);
 }
@@ -304,6 +322,7 @@ fn run_batch(
     start_state: Query<&Cells>,
     mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
     mut next_batch: ResMut<NextBatch>,
+    tick: Res<VoxelTick>,
 ) {
     if strategy.is_empty() {
         error!("Batching strategy is empty, but we are in the run step. This is a bug.");
@@ -335,11 +354,16 @@ fn run_batch(
                 let out = super::logic::step_diag(
                     ChunkIter::new(&mut chunk.chunk),
                     ChunkGared::new(chunks),
+                    tick.get(),
                 );
                 let _ = max.send(out);
             }
             #[cfg(not(debug_assertions))]
-            super::step(ChunkIter::new(&mut chunk.chunk), ChunkGared::new(chunks));
+            super::step(
+                ChunkIter::new(&mut chunk.chunk),
+                ChunkGared::new(chunks),
+                tick.get(),
+            );
             chunk.has_run = true;
         },
     );
@@ -396,10 +420,10 @@ fn batching_huristinc(
 }
 
 fn start_tick(
-    mut batch: ResMut<NextBatch>,
     mut step: ResMut<Step>,
     time: Res<Time<Real>>,
     mut local: Local<(u8, u32)>,
+    mut tick: ResMut<VoxelTick>,
 ) {
     if time.delta_secs_f64() > TARGET_TICKTIME {
         warn!(
@@ -414,6 +438,7 @@ fn start_tick(
         info!("Ticks this sec: {}", local.0);
         local.0 = 0;
     }
+    tick.inc();
     step.set(BatchingStep::Run);
 }
 
@@ -493,3 +518,96 @@ pub fn can_fuck_with_next_step(s: Res<Step>) -> bool {
 //         Ok(())
 //     }
 // }
+
+#[derive(SystemSet, Hash, Eq, PartialEq, Debug, Clone, Copy)]
+pub enum ApplyStep {
+    PreApply,
+    Apply,
+    PostApply,
+}
+
+fn apply_physics(
+    mut chunks: Query<(Entity, Option<&mut Cells>), With<NextStep>>,
+    neighbours: Query<(Entity, &Neighbours)>,
+    void_chunks: Res<VoidNeighbours>,
+) {
+    println!("Applying physics to chunks with NextStep");
+    let mut chunk_sets = Vec::new();
+    for (entity, chunk) in &mut chunks {
+        let mut to_apply = bevy::platform::collections::HashMap::new();
+        let Some(chunk) = chunk else {
+            // these are void chunks, we don't need to apply physics to them
+            continue;
+        };
+        for (x, y, z) in BlockIter::<CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE>::new() {
+            let block = chunk.get_block(x, y, z);
+            let cell = CellId::new(x, y, z);
+            if block.flags.contains(CellFlags::SINK) {
+                to_apply.insert(cell, cell.down());
+            } else if block.flags.contains(CellFlags::FLOAT) {
+                to_apply.insert(cell.up(), cell);
+            }
+        }
+        if to_apply.is_empty() {
+            continue;
+        }
+        chunk_sets.push((entity, to_apply));
+    }
+
+    println!("Applying physics to {} chunks", chunk_sets.len());
+    let mut applied = bevy::platform::collections::HashSet::new();
+
+    for (entity, to_apply) in chunk_sets {
+        applied.clear();
+        if let Ok((_, neighbours)) = neighbours.get(entity) {
+            let mut chunk_entitys = [
+                entity,
+                void_chunks.0[0],
+                void_chunks.0[1],
+                void_chunks.0[2],
+                void_chunks.0[3],
+                void_chunks.0[4],
+                void_chunks.0[5],
+            ];
+            for (n, e) in neighbours.iter() {
+                chunk_entitys[n as usize + 1] = e;
+            }
+            let Ok(chunks) = chunks.get_many_mut(chunk_entitys) else {
+                warn!(
+                    "Failed to get chunks for entity {entity:?}; Added Void chunks to allow edge chunks to work"
+                );
+                continue;
+            };
+
+            let chunks = chunks.map(|c| c.1);
+
+            let mut garde = MutChunkGared::new(chunks);
+            for (a, b) in to_apply {
+                if applied.contains(&a) || applied.contains(&b) {
+                    warn!("tried to swap already applied cells: {:?} and {:?}", a, b);
+                    continue;
+                }
+                applied.insert(a);
+                applied.insert(b);
+                garde.swap(a, b);
+            }
+        }
+    }
+}
+
+fn update_meshs(
+    mut query: Query<(Entity, &Cells, &mut ChunkData), Changed<Cells>>,
+    mut mesher: ResMut<phoxels::ChunkMesher>,
+) {
+    for (entity, cells, mut data) in &mut query {
+        for (i, block) in cells.blocks().enumerate() {
+            data.set_block(
+                i as u32 % CHUNK_SIZE as u32,
+                i as u32 / (CHUNK_SIZE * CHUNK_SIZE) as u32,
+                (i as u32 / CHUNK_SIZE as u32) % CHUNK_SIZE as u32,
+                block.get_block(),
+            );
+        }
+        mesher.add_to_queue(entity);
+    }
+}

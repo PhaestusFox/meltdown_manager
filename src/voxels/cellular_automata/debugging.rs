@@ -36,9 +36,9 @@ fn set_all_300k(mut chunks: Query<&mut Cells>, input: Res<ButtonInput<KeyCode>>)
     }
     for mut chunk in &mut chunks {
         for block in chunk.iter_mut() {
-            let props = block.block.block_properties();
-            let le = props.heat_capacity;
-            let mp = props.mass;
+            let props = block.get_block().properties();
+            let le = props.specific_heat;
+            let mp = props.melting_point;
             let re = if mp < FixedNum::lit("300") {
                 le * FixedNum::lit("300") + mp
             } else {

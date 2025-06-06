@@ -1,11 +1,12 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod not_wasm {
     use bevy::ecs::world::{FromWorld, World};
+    use fixed::traits::Fixed;
 
     use crate::voxels::cellular_automata::{CellData, CellFlags, FixedNum};
 
     pub struct MaxValue {
-        max: CellData,
+        max_temp: FixedNum,
         channel: std::sync::mpsc::Receiver<CellData>,
         sender: std::sync::mpsc::Sender<CellData>,
     }
@@ -15,23 +16,17 @@ mod not_wasm {
             self.sender.clone()
         }
 
-        pub fn get_max(&self) -> CellData {
-            self.max
+        pub fn get_max(&self) -> FixedNum {
+            self.max_temp
         }
 
         pub fn restart(&mut self) {
-            self.max = CellData {
-                block: crate::voxels::blocks::Blocks::Void,
-                energy: FixedNum::ONE,
-                presure: FixedNum::ONE,
-                charge: FixedNum::ONE,
-                flags: CellFlags::empty(),
-            };
+            self.max_temp = FixedNum::ONE;
         }
 
         pub fn run(&mut self) {
             while let Ok(data) = self.channel.try_recv() {
-                self.max.max(&data);
+                self.max_temp = self.max_temp.max(data.temperature());
             }
         }
     }
@@ -40,13 +35,7 @@ mod not_wasm {
         fn from_world(_: &mut World) -> Self {
             let (sender, channel) = std::sync::mpsc::channel();
             MaxValue {
-                max: CellData {
-                    block: crate::voxels::blocks::Blocks::Void,
-                    energy: FixedNum::ONE,
-                    presure: FixedNum::ONE,
-                    charge: FixedNum::ONE,
-                    flags: CellFlags::empty(),
-                },
+                max_temp: FixedNum::ZERO,
                 channel,
                 sender,
             }

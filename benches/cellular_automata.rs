@@ -12,21 +12,15 @@ fn gen_random_chunk() -> Cells {
     let mut chunk = Cells::empty();
     let mut rng = rand::rngs::StdRng::from_seed([0; 32]);
     let r = Blocks::iter().collect::<Vec<_>>();
+    let mut block = CellData::default();
     for x in 0..30 {
         for y in 0..30 {
             for z in 0..30 {
-                chunk.set_block(
-                    x,
-                    y,
-                    z,
-                    CellData {
-                        block: *r.choose(&mut rng).unwrap_or(&Blocks::Air),
-                        energy: FixedNum::from_num(rng.random_range(0..10000000)),
-                        charge: FixedNum::from_num(rand::random::<f64>()),
-                        presure: FixedNum::from_num(rand::random::<f64>()),
-                        flags: CellFlags::empty(),
-                    },
-                );
+                block.energy = FixedNum::from_num(rng.random_range(0..10000000));
+                block.charge = FixedNum::from_num(rand::random::<f64>());
+                block.presure = FixedNum::from_num(rand::random::<f64>());
+                block.set_block(*r.choose(&mut rng).unwrap_or(&Blocks::Air));
+                chunk.set_block(x, y, z, block);
             }
         }
     }
@@ -57,9 +51,17 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("step empty", |b| {
         b.iter(|| {
             let mut chunk = gen_chunk();
-            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy));
+            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 0);
         })
     });
+    for i in 0..10 {
+        c.bench_with_input(BenchmarkId::new("Step Empty ({})", i), &i, |b, i| {
+        b.iter(|| {
+            let mut chunk = gen_chunk();
+            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), i);
+        })
+    });
+
     chunks[0] = gen_random_chunk();
 
     let dummy = [
@@ -75,7 +77,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("step random", |b| {
         b.iter(|| {
             let mut chunk = gen_chunk();
-            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy));
+            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 1);
         })
     });
 }

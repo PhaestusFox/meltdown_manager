@@ -2,6 +2,7 @@
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy::scene::ron::de;
+use strum::IntoEnumIterator;
 
 use crate::voxels::blocks::Blocks;
 use crate::voxels::map::ChunkData;
@@ -76,6 +77,8 @@ fn setup(mut commands: Commands) {
 }
 
 mod utils;
+
+
 
 fn catch_failed_meshes(
     mut meshes: ResMut<phoxels::ChunkMesher>,
