@@ -18,6 +18,7 @@ noise = "*"
 bitflags = "*"
 bevy = {version = "0.16"}
 block_meta = {path = "crates/block_macro"}
+bevy_console = "0.14.0"
 
 [features]
 # default = []

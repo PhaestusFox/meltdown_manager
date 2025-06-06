@@ -2,6 +2,7 @@
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy::scene::ron::de;
+use bevy_console::{ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
 use crate::voxels::blocks::Blocks;
@@ -9,10 +10,10 @@ use crate::voxels::map::ChunkData;
 
 pub mod voxels;
 
-mod ui;
-
+mod console;
 mod diagnostics;
 mod player;
+mod ui;
 
 const TARGET_TICKTIME: f64 = 100.; // 10 ticks per second
 
@@ -46,24 +47,28 @@ pub fn run_game() {
     ));
     app
         // add modifide DefaultPlugin
-        .add_plugins(default_plugins)
-        .add_plugins(player::plugin)
-        .add_systems(Startup, setup)
-        .add_systems(Startup, ui::ui::spawn_crosshair);
+        .add_plugins((
+            default_plugins,
+            player::plugin,
+            ConsolePlugin,
+            voxels::map::map_plugin,
+            // add my diagnostics
+            diagnostics::MeltdownDiagnosticsPlugin,
+            // only add editor in debug builds
+            // editor is not supported on wasm32
+        ))
+        .add_systems(Startup, (setup, ui::ui::spawn_crosshair));
 
-    app.add_plugins(voxels::map::map_plugin);
-
-    // add my diagnostics
-    app.add_plugins(diagnostics::MeltdownDiagnosticsPlugin);
-    // only add editor in debug builds
-    // editor is not supported on wasm32
     #[cfg(debug_assertions)]
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
     // // dont know why some meshes are being detected as empty
     // app.add_systems(Update, catch_failed_meshes);
-
+    app.insert_resource(ConsoleConfiguration {
+        // override config here
+        ..Default::default()
+    });
     app.run();
 }
 
@@ -77,8 +82,6 @@ fn setup(mut commands: Commands) {
 }
 
 mod utils;
-
-
 
 fn catch_failed_meshes(
     mut meshes: ResMut<phoxels::ChunkMesher>,
