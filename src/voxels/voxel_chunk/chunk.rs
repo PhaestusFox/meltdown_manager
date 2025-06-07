@@ -61,7 +61,7 @@ impl ChunkId {
         world
             .get_mut::<Transform>(ctx.entity)
             .expect("Required Componet")
-            .translation = (id.0 * CHUNK_SIZE).as_vec3();
+            .translation = id.to_translation();
 
         if world.get::<Name>(ctx.entity).is_none() {
             world
@@ -148,6 +148,10 @@ impl ChunkId {
     pub fn from_translation(mut translation: Vec3) -> Self {
         translation /= CHUNK_SIZE as f32;
         ChunkId(translation.as_ivec3())
+    }
+
+    pub fn to_translation(self) -> Vec3 {
+        (self.0 * CHUNK_SIZE).as_vec3()
     }
 }
 

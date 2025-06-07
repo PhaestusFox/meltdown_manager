@@ -53,7 +53,6 @@ pub fn run_game() {
         .add_plugins((
             default_plugins,
             player::plugin,
-            ConsolePlugin,
             voxels::map::map_plugin,
             // add my diagnostics
             diagnostics::MeltdownDiagnosticsPlugin,
@@ -67,8 +66,10 @@ pub fn run_game() {
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
+    app.add_plugins(ConsolePlugin);
+
     // // dont know why some meshes are being detected as empty
-    // app.add_systems(Update, catch_failed_meshes);
+    app.add_systems(Update, catch_failed_meshes);
     app.insert_resource(ConsoleConfiguration {
         // override config here
         ..Default::default()

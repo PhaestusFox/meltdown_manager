@@ -56,11 +56,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     });
     for i in 0..10 {
         c.bench_with_input(BenchmarkId::new("Step Empty ({})", i), &i, |b, i| {
-        b.iter(|| {
-            let mut chunk = gen_chunk();
-            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), i);
+            b.iter(|| {
+                let mut chunk = gen_chunk();
+                step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), i);
+            })
         })
-    });
+    }
 
     chunks[0] = gen_random_chunk();
 
