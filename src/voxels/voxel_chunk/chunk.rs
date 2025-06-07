@@ -53,6 +53,10 @@ impl ChunkManager {
         self.map
             .sort_by_cached_key(|a, _| a.x + a.z * size.x + a.y * size.x * size.z);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = Entity> {
+        self.map.values().cloned()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

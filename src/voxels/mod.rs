@@ -6,7 +6,6 @@ mod voxel_chunk;
 use bevy::prelude::*;
 use blocks::Blocks;
 use cellular_automata::CellData;
-use map::CHUNK_VOL;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
 pub use voxel_chunk::*;
 
@@ -14,6 +13,8 @@ use crate::voxels::{
     cellular_automata::{CellFlags, Cells, FixedNum, NextStep},
     map::ChunkData,
 };
+
+pub use map::{CHUNK_SIZE, CHUNK_VOL};
 
 // set to 16 for final test
 const BX: i32 = 3;

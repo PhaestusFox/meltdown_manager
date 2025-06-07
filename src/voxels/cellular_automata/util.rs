@@ -69,6 +69,10 @@ impl CellId {
         CellId(IVec3::new(x, y, z))
     }
 
+    pub fn from_vec(vec: IVec3) -> Self {
+        CellId(vec)
+    }
+
     pub fn neighbours(&self) -> impl Iterator<Item = CellId> {
         CellNeighbourIter(*self, 0)
     }
@@ -93,6 +97,19 @@ impl CellId {
     }
 
     pub(crate) fn order(cell: CellId, target: CellId) -> (CellId, CellId) {
+        // let edge = cell.x < 0
+        //     || cell.z < 0
+        //     || cell.y < 0
+        //     || target.x < 0
+        //     || target.z < 0
+        //     || target.y < 0
+        //     || cell.x >= CHUNK_SIZE
+        //     || cell.z >= CHUNK_SIZE
+        //     || cell.y >= CHUNK_SIZE
+        //     || target.x >= CHUNK_SIZE
+        //     || target.z >= CHUNK_SIZE
+        //     || target.y >= CHUNK_SIZE;
+
         if cell.x < target.x || cell.z < target.z || cell.y < target.y {
             (cell, target)
         } else {

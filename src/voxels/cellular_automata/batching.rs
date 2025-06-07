@@ -3,7 +3,7 @@ use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*
 use crate::{
     TARGET_TICKTIME,
     diagnostics::ChunkCount,
-    utils::BlockIter,
+    utils::{BlockIter, CoreIter, EdgeIter},
     voxels::{
         ChunkId, Neighbours,
         blocks::Blocks,
@@ -555,22 +555,23 @@ pub enum ApplyStep {
 }
 
 fn apply_physics(
-    mut chunks: Query<(Entity, Option<&mut Cells>), With<NextStep>>,
+    mut chunks: Query<(Option<&mut Cells>), With<NextStep>>,
     neighbours: Query<(Entity, &Neighbours)>,
     void_chunks: Res<VoidNeighbours>,
-    tick: Res<VoxelTick>,
     chunk_manager: Res<crate::voxels::ChunkManager>,
 ) {
     let mut chunk_sets = Vec::new();
-    for (entity, chunk) in &mut chunks {
-        let mut to_apply = bevy::platform::collections::HashMap::new();
-        let Some(chunk) = chunk else {
-            // these are void chunks, we don't need to apply physics to them
+    // let (send, read) = std::sync::mpsc::channel();
+    // find all changes that want to be applied
+    for entity in chunk_manager.iter() {
+        let Ok(Some(chunk)) = chunks.get(entity) else {
+            warn!("Failed to get chunk {entity:?} for physics application, skipping");
             continue;
         };
-        for (x, y, z) in BlockIter::<CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE>::new() {
-            let block = chunk.get_block(x, y, z);
-            let cell = CellId::new(x, y, z);
+        let mut to_core = bevy::platform::collections::HashMap::new();
+        let mut to_edge = bevy::platform::collections::HashMap::new();
+        for cell in CoreIter::new() {
+            let block = chunk.get_block(cell.x, cell.y, cell.z);
             let target = match block.flags.intersection(CellFlags::MOVE_ALL) {
                 CellFlags::MOVE_LEFT => cell.left(),
                 CellFlags::MOVE_RIGHT => cell.right(),
@@ -581,19 +582,43 @@ fn apply_physics(
                 _ => continue, // no physics to apply
             };
             let (a, b) = CellId::order(cell, target);
-            to_apply.insert(a, b);
+            to_core.insert(a, b);
         }
-        if to_apply.is_empty() {
-            continue;
+        for cell in EdgeIter::new() {
+            let block = chunk.get_block(cell.x, cell.y, cell.z);
+            let target = match block.flags.intersection(CellFlags::MOVE_ALL) {
+                CellFlags::MOVE_LEFT => cell.left(),
+                CellFlags::MOVE_RIGHT => cell.right(),
+                CellFlags::MOVE_FORWARD => cell.forward(),
+                CellFlags::MOVE_BACK => cell.backward(),
+                CellFlags::MOVE_DOWN => cell.down(),
+                CellFlags::MOVE_UP => cell.up(),
+                _ => continue, // no physics to apply
+            };
+            let (a, b) = CellId::order(cell, target);
+            to_edge.insert(a, b);
         }
-        chunk_sets.push((entity, to_apply));
+        if to_core.is_empty() && to_edge.is_empty() {
+            continue; // no physics to apply
+        }
+        let to_core = if to_core.is_empty() {
+            None
+        } else {
+            Some(to_core)
+        };
+        let to_edge = if to_edge.is_empty() {
+            None
+        } else {
+            Some(to_edge)
+        };
+        chunk_sets.push((entity, (to_core, to_edge)));
     }
     if chunk_sets.is_empty() {
         return;
     }
     println!("Applying physics to {} chunks", chunk_sets.len());
     let mut applied = bevy::platform::collections::HashSet::new();
-    for (entity, to_apply) in chunk_sets {
+    for (entity, (to_core, to_edge)) in chunk_sets {
         applied.clear();
         if let Ok((_, neighbours)) = neighbours.get(entity) {
             let mut chunk_entitys = [
@@ -615,10 +640,25 @@ fn apply_physics(
                 continue;
             };
 
-            let chunks = chunks.map(|c| c.1);
-
             let mut garde = MutChunkGared::new(chunks);
-            for (a, b) in to_apply {
+            let iter = match (to_core, to_edge) {
+                (None, None) => continue,
+                (None, Some(e)) => e,
+                (Some(c), None) => c,
+                (Some(c), Some(e)) => {
+                    for (a, b) in e {
+                        if applied.contains(&a) || applied.contains(&b) {
+                            continue;
+                        }
+                        applied.insert(a);
+                        applied.insert(b);
+                        garde.swap(a, b);
+                    }
+                    c
+                }
+            };
+
+            for (a, b) in iter {
                 if applied.contains(&a) || applied.contains(&b) {
                     continue;
                 }

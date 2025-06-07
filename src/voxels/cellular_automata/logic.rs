@@ -72,30 +72,28 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                         }
                         cell.flags.insert(CellFlags::MOVE_UP);
                         break;
-                    } else if i != 0
-                        && target.can_move() // check if target is liquid or gas
-                        && target.properties().density <= cell.properties().density
-                    // check density --- can only swap if decity is same or higher then target
+                    } else if i != 0 && target.can_move()
+                    // check if target is liquid or gas
                     {
                         cell.flags.insert(flag);
                         break;
                     }
-                } else if i == 1 // if moving down
+                } else {
+                    if i == 1 // if moving down
                 && target.is_gas() // check target is gas --- dont want gases sinking in liquids
                     && target.properties().density <= cell.properties().density
-                {
-                    if cell.get_block() == Blocks::Air && target.get_block() == Blocks::Water {
-                        println!("Air moving Down in Water");
+                    {
+                        if cell.get_block() == Blocks::Air && target.get_block() == Blocks::Water {
+                            println!("Air moving Down in Water");
+                        }
+                        cell.flags.insert(CellFlags::MOVE_DOWN);
+                        break;
+                    } else if i != 1 && target.can_move()
+                    // check if target is liquid or gas
+                    {
+                        cell.flags.insert(flag);
+                        break;
                     }
-
-                    cell.flags.insert(CellFlags::MOVE_DOWN);
-                    break;
-                } else if i != 1
-                    && target.can_move() // check if target is liquid or gas
-                    && target.properties().density >= cell.properties().density
-                {
-                    cell.flags.insert(flag);
-                    break;
                 }
             }
         } else if step.contains(StepMode::GRAVITY) {
