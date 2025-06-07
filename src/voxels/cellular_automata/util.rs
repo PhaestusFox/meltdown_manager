@@ -4,6 +4,8 @@ use bevy::{
     prelude::{Component, Deref, DerefMut},
 };
 
+#[cfg(debug_assertions)]
+use crate::voxels::ChunkId;
 use crate::voxels::{blocks::Blocks, cellular_automata::CellData, map::ChunkData};
 const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 pub type Cells = crate::voxels::Chunk<CellData>;
@@ -138,6 +140,8 @@ pub struct ChunkBlock<'a> {
 }
 
 pub struct ChunkGared<'a> {
+    #[cfg(debug_assertions)]
+    root: ChunkId,
     chunk: [Option<&'a Cells>; 7],
 }
 
@@ -239,8 +243,23 @@ impl GaredIndex {
 }
 
 impl<'a> ChunkGared<'a> {
+    #[cfg(not(debug_assertions))]
     pub fn new(chunks: [Option<&'a Cells>; 7]) -> Self {
         ChunkGared { chunk: chunks }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn new(chunks: [Option<&'a Cells>; 7], root: ChunkId) -> Self {
+        {
+            ChunkGared {
+                chunk: chunks,
+                root,
+            }
+        }
+    }
+    #[cfg(debug_assertions)]
+    pub fn root(&self) -> ChunkId {
+        self.root
     }
 
     pub fn get(&self, id: CellId) -> CellData {

@@ -1,11 +1,11 @@
-use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*};
+use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*, scene::ron::de};
 
 use crate::{
     TARGET_TICKTIME,
     diagnostics::ChunkCount,
     utils::BlockIter,
     voxels::{
-        Neighbours,
+        ChunkId, Neighbours,
         blocks::Blocks,
         cellular_automata::*,
         map::{CHUNK_SIZE, ChunkData},
@@ -221,6 +221,9 @@ fn set_prev(
         }
         assert!(next.has_run);
         next.has_run = false;
+        if chunk.is_solid() && chunk.get_block(0, 0, 0).get_block() == Blocks::Air {
+            continue;
+        }
         std::mem::swap(chunk.bypass_change_detection(), &mut next.chunk);
     }
     batch.reset();
@@ -280,32 +283,49 @@ fn update_batching(
 fn force_finish(
     strategy: Res<BatchingStrategy>,
     start_state: Query<&Cells>,
-    mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
+    mut new_state: Query<(Entity, &ChunkId, &mut NextStep, &Neighbours)>,
     mut next_state: ResMut<Step>,
     mut next_batch: ResMut<NextBatch>,
     tick: Res<VoxelTick>,
 ) {
     for finish in strategy.batchs().skip(next_batch.get()) {
         next_batch.take();
-        new_state
-            .par_iter_many_unique_mut(finish)
-            .for_each(|(center, mut chunk, neighbours)| {
+        new_state.par_iter_many_unique_mut(finish).for_each(
+            |(center, id, mut chunk, neighbours)| {
                 let Ok(center_pre) = start_state.get(center) else {
                     return;
                 };
+                let block_o = center_pre.get_block(0, 0, 0);
+                if block_o.get_block() == Blocks::Air && center_pre.is_solid() {
+                    chunk.has_run = true;
+                    return; // skip chunks filled with air
+                }
                 let mut chunks = [Some(center_pre), None, None, None, None, None, None];
                 for (i, n) in neighbours.iter() {
                     if let Ok(neighbour) = start_state.get(n) {
                         chunks[i as usize + 1] = Some(neighbour);
                     }
                 }
-                super::step(
-                    ChunkIter::new(&mut chunk.chunk),
-                    ChunkGared::new(chunks),
-                    tick.get(),
-                );
+                #[cfg(debug_assertions)]
+                {
+                    super::step(
+                        ChunkIter::new(&mut chunk.chunk),
+                        ChunkGared::new(chunks, *id),
+                        tick.get(),
+                    );
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    super::step(
+                        ChunkIter::new(&mut chunk.chunk),
+                        ChunkGared::new(chunks),
+                        tick.get(),
+                    );
+                }
+
                 chunk.has_run = true;
-            });
+            },
+        );
     }
 
     next_state.set(BatchingStep::Done);
@@ -316,7 +336,7 @@ fn run_batch(
     mut state: ResMut<Step>,
     max: NonSend<crate::diagnostics::MaxValue>,
     start_state: Query<&Cells>,
-    mut new_state: Query<(Entity, &mut NextStep, &Neighbours)>,
+    mut new_state: Query<(Entity, &ChunkId, &mut NextStep, &Neighbours), With<Cells>>,
     mut next_batch: ResMut<NextBatch>,
     tick: Res<VoxelTick>,
 ) {
@@ -334,10 +354,15 @@ fn run_batch(
     };
     new_state.par_iter_many_unique_mut(batch).for_each_init(
         || sender.clone(),
-        |max, (center, mut chunk, neighbours)| {
+        |max, (center, id, mut chunk, neighbours)| {
             let Ok(center_pre) = start_state.get(center) else {
                 return;
             };
+            let block_o = center_pre.get_block(0, 0, 0);
+            if block_o.get_block() == Blocks::Air && center_pre.is_solid() {
+                chunk.has_run = true;
+                return; // skip chunks filled with air
+            }
             let mut chunks = [Some(center_pre), None, None, None, None, None, None];
             for (i, n) in neighbours.iter() {
                 if let Ok(neighbour) = start_state.get(n) {
@@ -349,7 +374,7 @@ fn run_batch(
             {
                 let out = super::logic::step_diag(
                     ChunkIter::new(&mut chunk.chunk),
-                    ChunkGared::new(chunks),
+                    ChunkGared::new(chunks, *id),
                     tick.get(),
                 );
                 let _ = max.send(out);
@@ -373,6 +398,7 @@ fn start_ticking(
     mut state: ResMut<Step>,
     generating_chunks: Res<phoxels::ChunkGenerator<Blocks>>,
     chunk_count: Res<ChunkCount>,
+    mut chunk_manager: ResMut<crate::voxels::ChunkManager>,
 ) {
     if generating_chunks.is_empty() {
         println!(
@@ -380,6 +406,7 @@ fn start_ticking(
             chunk_count.get()
         );
         state.set(BatchingStep::CalculateBatchs);
+        chunk_manager.update_chunk_order(); // run this just before we start to get all chunks in known order
     }
 }
 
@@ -608,6 +635,9 @@ fn update_meshs(
     mut mesher: ResMut<phoxels::ChunkMesher>,
 ) {
     for (entity, cells, mut data) in &mut query {
+        if cells.is_solid() && cells.get_block(0, 0, 0).get_block() == Blocks::Air {
+            continue; // skip chunks filled with air
+        }
         for (i, block) in cells.blocks().enumerate() {
             data.set_block(
                 i as u32 % CHUNK_SIZE as u32,

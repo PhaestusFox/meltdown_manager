@@ -19,7 +19,12 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
     let step = StepMode::from_bits_retain(tick);
     for (id, data) in chunk {
         let mut cell = neighbours.get(id);
-        debug_assert!(cell.get_block() != Blocks::Void, "Cell at {:?} is void", id);
+        debug_assert!(
+            cell.get_block() != Blocks::Void,
+            "Cell {:?} in {:?} is void",
+            id,
+            neighbours.root()
+        );
         for neighbour_id in id.neighbours() {
             let neighbour_data = neighbours.get(neighbour_id);
             let t1 = cell.temperature();
@@ -62,6 +67,9 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                         && target.properties().density >= cell.properties().density
                     // check density --- can only swap if decity is same or lower then target
                     {
+                        if cell.get_block() == Blocks::Water && target.get_block() == Blocks::Air {
+                            println!("Water moving up in Air");
+                        }
                         cell.flags.insert(CellFlags::MOVE_UP);
                         break;
                     } else if i != 0
@@ -76,6 +84,10 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                 && target.is_gas() // check target is gas --- dont want gases sinking in liquids
                     && target.properties().density <= cell.properties().density
                 {
+                    if cell.get_block() == Blocks::Air && target.get_block() == Blocks::Water {
+                        println!("Air moving Down in Water");
+                    }
+
                     cell.flags.insert(CellFlags::MOVE_DOWN);
                     break;
                 } else if i != 1

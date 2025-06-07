@@ -65,6 +65,7 @@ enum ChunkManagerError {
 
 #[derive(Component, Debug)]
 pub struct Chunk<T> {
+    is_single_block: bool,
     blocks: Vec<T>,
 }
 
@@ -74,6 +75,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
+            is_single_block: self.is_single_block,
             blocks: self.blocks.clone(),
         }
     }
@@ -112,6 +114,10 @@ impl<T> Chunk<T> {
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.blocks.iter_mut()
     }
+
+    pub fn is_solid(&self) -> bool {
+        self.is_single_block
+    }
 }
 
 impl<T: Copy + Default> Chunk<T> {
@@ -127,25 +133,32 @@ impl<T: Copy + Default> Chunk<T> {
         }
     }
 
-    #[inline(always)]
-    pub fn set_block(&mut self, x: i32, y: i32, z: i32, to: T) {
-        if Self::in_bounds(x, y, z) {
-            self.blocks[Self::index(x, y, z)] = to;
-        } else {
-            #[cfg(debug_assertions)]
-            panic!("Index({}, {}, {}) is out of bound", x, y, z);
-        }
-    }
-
     pub fn empty() -> Self {
         Self {
+            is_single_block: true,
             blocks: vec![T::default(); CHUNK_VOL],
         }
     }
 
     pub fn solid(fill: T) -> Self {
         Self {
+            is_single_block: true,
             blocks: vec![fill; CHUNK_VOL],
+        }
+    }
+}
+
+impl<T: Clone + PartialEq> Chunk<T> {
+    #[inline(always)]
+    pub fn set_block(&mut self, x: i32, y: i32, z: i32, to: T) {
+        if self.is_single_block && self.blocks[0] != to {
+            self.is_single_block = false;
+        }
+        if Self::in_bounds(x, y, z) {
+            self.blocks[Self::index(x, y, z)] = to;
+        } else {
+            #[cfg(debug_assertions)]
+            panic!("Index({}, {}, {}) is out of bound", x, y, z);
         }
     }
 }
@@ -275,12 +288,18 @@ impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
 impl From<&ChunkData> for Chunk<Blocks> {
     fn from(data: &ChunkData) -> Self {
         let mut blocks = Vec::with_capacity(CHUNK_VOL);
+        let mut same = true;
+        let first = data.get_block(0, 0, 0).unwrap_or(Blocks::Void);
         for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
             let Some(block) = data.get_block(x as u32, y as u32, z as u32) else {
                 panic!("Invalid Block at ({}, {}, {}); {:?}", x, y, z, data);
             };
+            same &= block == first;
             blocks.push(block);
         }
-        Chunk { blocks }
+        Chunk {
+            is_single_block: same,
+            blocks,
+        }
     }
 }

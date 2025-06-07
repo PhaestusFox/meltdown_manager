@@ -70,37 +70,19 @@ fn spawn_test(
 #[cfg(not(target_arch = "wasm32"))]
 mod tests;
 
-fn remove_evaluation(
-    mut mesher: ResMut<phoxels::ChunkMesher>,
-    mut chunks: Query<(Entity, &mut NextStep, &mut ChunkData)>,
-) {
+fn remove_evaluation(mut chunks: Query<&mut Cells>) {
     let mut removed = 0;
-    for (entity, mut next, mut data) in &mut chunks {
-        let mut update = false;
+    for mut chunk in &mut chunks {
         for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
-            #[cfg(debug_assertions)]
-            let chunk = next
-                .borrow_mut()
-                .expect("NextStep has not run yet\n Should only run in Step::Done");
-            #[cfg(not(debug_assertions))]
-            let Some(chunk) = next.borrow_mut() else {
-                error!("Tried to remove gas from a chunk that has not run yet");
-                continue;
-            };
             let cell = chunk.get_by_index_mut(Cells::index(x, y, z));
             if cell.get_block() == Blocks::Void || cell.get_block() == Blocks::Air {
                 continue;
             }
-            if cell.flags.contains(CellFlags::IS_GAS) {
-                data.set_block(x as u32, y as u32, z as u32, Blocks::Air);
+            if cell.is_gas() {
                 cell.set_block(Blocks::Air);
                 cell.energy = FixedNum::ZERO;
-                update = true;
                 removed += 1;
             };
-        }
-        if update {
-            mesher.add_to_queue(entity);
         }
     }
     if removed > 0 {
