@@ -74,8 +74,8 @@ mod tests;
 fn remove_evaluation(mut chunks: Query<&mut Cells>) {
     let mut removed = 0;
     for mut chunk in &mut chunks {
-        for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
-            let cell = chunk.get_by_index_mut(Cells::index(x, y, z));
+        for (x, y, z) in crate::utils::BlockIter::new() {
+            let mut cell = chunk.get_by_index_mut(Cells::index(x, y, z));
             if cell.get_block() == Blocks::Void || cell.get_block() == Blocks::Air {
                 continue;
             }

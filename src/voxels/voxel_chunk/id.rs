@@ -22,8 +22,8 @@ impl ChunkId {
         match direction {
             NeighbourDirection::Up => ChunkId(self.0 + IVec3::Y),
             NeighbourDirection::Down => ChunkId(self.0 - IVec3::Y),
-            NeighbourDirection::Left => ChunkId(self.0 + IVec3::X),
-            NeighbourDirection::Right => ChunkId(self.0 - IVec3::X),
+            NeighbourDirection::Left => ChunkId(self.0 - IVec3::X),
+            NeighbourDirection::Right => ChunkId(self.0 + IVec3::X),
             NeighbourDirection::Front => ChunkId(self.0 + IVec3::Z),
             NeighbourDirection::Back => ChunkId(self.0 - IVec3::Z),
         }
@@ -67,10 +67,10 @@ impl ChunkId {
                 .insert(Name::new(format!("{}", id)));
         }
 
-        let mut neighbours = world
-            .get_mut::<Neighbours>(ctx.entity)
+        let neighbours = world
+            .get::<Neighbours>(ctx.entity)
             .expect("Required Componet");
-        let too_apply = EmptyNeighboursIter::new(&mut neighbours).collect::<Vec<_>>();
+        let too_apply = EmptyNeighboursIter::new(neighbours).collect::<Vec<_>>();
 
         let manager = world.resource::<ChunkManager>();
         let mut can_apply = Vec::with_capacity(too_apply.len());
@@ -144,7 +144,7 @@ impl ChunkId {
 
     pub fn from_translation(mut translation: Vec3) -> Self {
         translation /= CHUNK_SIZE as f32;
-        ChunkId(translation.as_ivec3())
+        ChunkId(translation.floor().as_ivec3())
     }
 
     pub fn to_translation(self) -> Vec3 {
@@ -254,7 +254,7 @@ impl FromWorld for VoidNeighbours {
 }
 
 struct EmptyNeighboursIter<'a> {
-    neighbours: &'a mut Neighbours,
+    neighbours: &'a Neighbours,
     index: usize,
 }
 
@@ -288,7 +288,7 @@ impl Iterator for NeighboursIter<'_> {
 }
 
 impl<'a> EmptyNeighboursIter<'a> {
-    fn new(neighbours: &'a mut Neighbours) -> Self {
+    fn new(neighbours: &'a Neighbours) -> Self {
         Self {
             neighbours,
             index: 0,

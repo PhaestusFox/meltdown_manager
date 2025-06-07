@@ -5,9 +5,6 @@ use bevy::scene::ron::de;
 use bevy_console::{AddConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
-use crate::console::commands::{
-    ChunkHighlightCommand, ChunkHighlightState, chunk_highlight_command,
-};
 use crate::voxels::blocks::Blocks;
 use crate::voxels::map::ChunkData;
 
@@ -59,8 +56,7 @@ pub fn run_game() {
             // only add editor in debug builds
             // editor is not supported on wasm32
         ))
-        .add_systems(Startup, (setup, ui::ui::spawn_crosshair))
-        .add_console_command::<ChunkHighlightCommand, _>(chunk_highlight_command);
+        .add_systems(Startup, (setup, ui::ui::spawn_crosshair));
 
     // #[cfg(debug_assertions)]
     // #[cfg(not(target_arch = "wasm32"))]
@@ -72,9 +68,6 @@ pub fn run_game() {
     app.add_systems(Update, catch_failed_meshes);
     app.insert_resource(ConsoleConfiguration {
         // override config here
-        ..Default::default()
-    });
-    app.insert_resource(ChunkHighlightState {
         ..Default::default()
     });
     app.run();

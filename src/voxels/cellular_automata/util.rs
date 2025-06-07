@@ -279,14 +279,12 @@ impl<'a> ChunkGared<'a> {
         self.root
     }
 
-    pub fn get(&self, id: CellId) -> CellData {
+    pub fn get(&self, id: CellId) -> Option<CellData> {
         let index = GaredIndex::from_id(id);
         let normalized_id = index.normalize_id(id);
-        let Some(chunk) = self.get_chunk(index) else {
-            return CellData::THE_VOID;
-        };
+        let chunk = self.get_chunk(index)?;
         let index = Cells::index(normalized_id.x, normalized_id.y, normalized_id.z);
-        chunk.get_by_index(index)
+        Some(chunk.get_by_index(index))
     }
 
     fn get_chunk(&self, index: GaredIndex) -> Option<&'a Cells> {

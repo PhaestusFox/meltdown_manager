@@ -157,7 +157,6 @@ fn fragment(
     // } else {
     //     discard;
     // }
-
     let autos = data[aindex / 4];
     var adata: u32;
     

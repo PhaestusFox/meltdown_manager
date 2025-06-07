@@ -8,39 +8,39 @@ use bevy::{
 
 use crate::voxels::cellular_automata::CellId;
 
-pub struct BlockIter<const X: i32, const Y: i32, const Z: i32> {
+pub struct BlockIter {
     x: i32,
     y: i32,
     z: i32,
 }
 
-impl<const X: i32, const Y: i32, const Z: i32> BlockIter<X, Y, Z> {
-    pub fn new() -> BlockIter<X, Y, Z> {
+impl BlockIter {
+    pub fn new() -> BlockIter {
         BlockIter { x: 0, y: 0, z: 0 }
     }
 }
 
-impl<const X: i32, const Y: i32, const Z: i32> Default for BlockIter<X, Y, Z> {
+impl Default for BlockIter {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const X: i32, const Y: i32, const Z: i32> Iterator for BlockIter<X, Y, Z> {
+impl Iterator for BlockIter {
     type Item = (i32, i32, i32);
     fn next(&mut self) -> Option<Self::Item> {
-        let out = if self.y >= Y {
+        let out = if self.y >= CHUNK_SIZE {
             return None;
         } else {
             (self.x, self.y, self.z)
         };
         self.x += 1;
-        if self.x >= X {
-            self.x -= X;
+        if self.x >= CHUNK_SIZE {
+            self.x -= CHUNK_SIZE;
             self.z += 1;
         }
-        if self.z >= Z {
-            self.z -= Z;
+        if self.z >= CHUNK_SIZE {
+            self.z -= CHUNK_SIZE;
             self.y += 1
         }
         Some(out)
@@ -62,16 +62,30 @@ impl CoreIter {
 impl Iterator for CoreIter {
     type Item = CellId;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.0.y >= Self::SIZE {
+        //let out = if self.y >= CHUNK_SIZE {
+        //     return None;
+        // } else {
+        //     (self.x, self.y, self.z)
+        // };
+        // self.x += 1;
+        // if self.x >= CHUNK_SIZE {
+        //     self.x -= CHUNK_SIZE;
+        //     self.z += 1;
+        // }
+        // if self.z >= CHUNK_SIZE {
+        //     self.z -= CHUNK_SIZE;
+        //     self.y += 1
+        // }
+        if self.0.y > Self::SIZE {
             return None;
         }
         let cell = CellId::from_vec(self.0);
         self.0.x += 1;
-        if self.0.x >= CoreIter::SIZE {
+        if self.0.x > CoreIter::SIZE {
             self.0.x = 1;
             self.0.z += 1;
         }
-        if self.0.z >= CoreIter::SIZE {
+        if self.0.z > CoreIter::SIZE {
             self.0.z = 1;
             self.0.y += 1;
         }
@@ -118,9 +132,11 @@ impl Iterator for EdgeIter {
 fn edge_is_not_in_core() {
     let edge = EdgeIter::new().collect::<HashSet<_>>();
     let core = CoreIter::new().collect::<HashSet<_>>();
-    let all = BlockIter::<30, 30, 30>::new()
+    let all = BlockIter::new()
         .map(|(x, y, z)| CellId::new(x, y, z))
         .collect::<HashSet<_>>();
+    assert_eq!(edge.len(), CHUNK_VOL - (CHUNK_SIZE - 2).pow(3) as usize);
+    assert_eq!(core.len(), (CHUNK_SIZE - 2).pow(3) as usize);
     assert_eq!(edge.len() + core.len(), CHUNK_VOL);
     assert_eq!(all.len(), CHUNK_VOL);
     assert_eq!(all, edge.union(&core).cloned().collect::<HashSet<_>>());

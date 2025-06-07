@@ -891,7 +891,7 @@ fn remove_diagnostics(
 fn dummy_diagnostics() -> AutomitaDiagnosticChunk {
     let mut chunk = Cells::solid(CellData::THE_VOID);
     let mut dummmy = CellData::default();
-    for (x, y, z) in BlockIter::<30, 30, 30>::new() {
+    for (x, y, z) in BlockIter::new() {
         dummmy.energy = FixedNum::from_num(8 * x);
         dummmy.charge = FixedNum::from_num(8 * y);
         dummmy.presure = FixedNum::from_num(8 * z);

@@ -46,7 +46,7 @@ fn chunk_compression() {
 
     let mut raw = vec![Blocks::Void; CHUNK_VOL];
     // set every other block copper
-    for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+    for (x, y, z) in BlockIter::new().step_by(2) {
         raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
         chunk.set_block(x, y, z, Blocks::Copper);
     }
@@ -63,7 +63,7 @@ fn chunk_compression() {
     let mut chunk = solid;
     // todo add transiton test for RLE
     let mut r = 1;
-    for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+    for (x, y, z) in BlockIter::new().step_by(2) {
         chunk.set_block(x, y, z, Blocks::Iron);
         r += 2;
         if r >= 9000 {
@@ -111,7 +111,7 @@ fn chunk_serde() {
 
     let mut raw = vec![Blocks::Void; CHUNK_VOL];
     // set every other block copper
-    for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+    for (x, y, z) in BlockIter::new().step_by(2) {
         raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
         chunk.set_block(x, y, z, Blocks::Copper);
     }
@@ -126,7 +126,7 @@ fn chunk_serde() {
     chunk = Chunk::empty();
 
     let mut r = 1;
-    for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+    for (x, y, z) in BlockIter::new().step_by(2) {
         chunk.set_block(x, y, z, Blocks::Iron);
         r += 2;
         if r >= 9000 {

@@ -426,7 +426,7 @@ impl CellData {
 //         // test worse case for RLE
 //         let mut raw = vec![CellData::default(); CHUNK_VOL];
 //         // set every other block copper
-//         for (x, y, z) in BlockIter::<30, 30, 30>::new().step_by(2) {
+//         for (x, y, z) in BlockIter::new().step_by(2) {
 //             raw[Chunk::<CellData>::index(x, y, z)] = dummy;
 //             chunk.set_block(x, y, z, dummy);
 //         }

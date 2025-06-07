@@ -122,6 +122,10 @@ impl<T> Chunk<T> {
     pub fn is_solid(&self) -> bool {
         self.is_single_block
     }
+
+    pub fn set_not_solid(&mut self) {
+        self.is_single_block = false;
+    }
 }
 
 impl<T: Copy + Default> Chunk<T> {
@@ -177,10 +181,51 @@ impl<T: Copy> Chunk<T> {
         debug_assert!(index < CHUNK_VOL);
         self.blocks[index]
     }
+}
 
-    pub fn get_by_index_mut(&mut self, index: usize) -> &mut T {
+impl<T: Copy + PartialEq> Chunk<T> {
+    pub fn get_by_index_mut(&mut self, index: usize) -> BlockGarde<'_, T> {
         debug_assert!(index < CHUNK_VOL);
-        &mut self.blocks[index]
+        BlockGarde {
+            index,
+            chunk: self,
+            changed: false,
+        }
+    }
+}
+
+pub struct BlockGarde<'a, T: Copy + PartialEq> {
+    index: usize,
+    chunk: &'a mut Chunk<T>,
+    changed: bool,
+}
+
+impl<'a, T: Copy + PartialEq> core::ops::Deref for BlockGarde<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.chunk.blocks[self.index]
+    }
+}
+
+impl<'a, T: Copy + PartialEq> core::ops::DerefMut for BlockGarde<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.changed = true;
+        &mut self.chunk.blocks[self.index]
+    }
+}
+
+impl<T: PartialEq + Copy> Drop for BlockGarde<'_, T> {
+    fn drop(&mut self) {
+        if self.changed && self.chunk.is_single_block {
+            let test = if self.index == 0 {
+                self.chunk.blocks[1]
+            } else {
+                self.chunk.blocks[0]
+            };
+            if self.chunk.blocks[self.index] != test {
+                self.chunk.is_single_block = false;
+            }
+        }
     }
 }
 
@@ -273,7 +318,7 @@ impl<T: PartialEq + Copy + Default> Chunk<T> {
     }
 }
 
-struct ChunkBlockIter<'a, T>(crate::utils::BlockIter<30, 30, 30>, &'a Chunk<T>);
+struct ChunkBlockIter<'a, T>(crate::utils::BlockIter, &'a Chunk<T>);
 
 impl<'a, T> ChunkBlockIter<'a, T> {
     fn new(chunk: &'a Chunk<T>) -> Self {
@@ -294,7 +339,7 @@ impl From<&ChunkData> for Chunk<Blocks> {
         let mut blocks = Vec::with_capacity(CHUNK_VOL);
         let mut same = true;
         let first = data.get_block(0, 0, 0).unwrap_or(Blocks::Void);
-        for (x, y, z) in crate::utils::BlockIter::<30, 30, 30>::new() {
+        for (x, y, z) in crate::utils::BlockIter::new() {
             let Some(block) = data.get_block(x as u32, y as u32, z as u32) else {
                 panic!("Invalid Block at ({}, {}, {}); {:?}", x, y, z, data);
             };
