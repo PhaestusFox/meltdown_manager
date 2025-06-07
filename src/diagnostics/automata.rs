@@ -448,7 +448,7 @@ use crate::{
     utils::BlockIter,
     voxels::{
         cellular_automata::FixedNum,
-        map::{CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL},
+        map::{CHUNK_AREA, CHUNK_SIZE, CHUNK_VOL},
     },
 };
 

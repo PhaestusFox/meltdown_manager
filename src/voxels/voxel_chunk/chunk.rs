@@ -4,7 +4,7 @@ use chunk_serde::CompressedChunkData;
 use crate::voxels::{
     blocks::Blocks,
     cellular_automata::{CellData, NextStep},
-    map::{CHUNK_ARIA, CHUNK_SIZE, CHUNK_VOL, ChunkData},
+    map::{CHUNK_AREA, CHUNK_SIZE, CHUNK_VOL, ChunkData},
 };
 
 #[derive(Component, Deref, Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Reflect)]
@@ -226,7 +226,7 @@ impl<T: PartialEq> PartialEq for Chunk<T> {
 impl<T> Chunk<T> {
     #[inline(always)]
     pub fn index(x: i32, y: i32, z: i32) -> usize {
-        (x + z * CHUNK_SIZE + y * CHUNK_ARIA) as usize
+        (x + z * CHUNK_SIZE + y * CHUNK_AREA) as usize
     }
 
     #[inline(always)]

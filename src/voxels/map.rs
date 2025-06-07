@@ -26,8 +26,8 @@ use crate::{
 pub type ChunkData = phoxels::prelude::ChunkData<Blocks>;
 
 pub const CHUNK_SIZE: i32 = 30;
-pub const CHUNK_ARIA: i32 = CHUNK_SIZE * CHUNK_SIZE;
-pub const CHUNK_VOL: usize = (CHUNK_ARIA * CHUNK_SIZE) as usize;
+pub const CHUNK_AREA: i32 = CHUNK_SIZE * CHUNK_SIZE;
+pub const CHUNK_VOL: usize = (CHUNK_AREA * CHUNK_SIZE) as usize;
 
 pub fn map_plugin(app: &mut App) {
     let noise = MapNoise::new();

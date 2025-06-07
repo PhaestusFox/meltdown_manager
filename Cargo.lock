@@ -3811,6 +3811,7 @@ dependencies = [
  "bitflags 2.9.1",
  "block_meta",
  "chunk_serde",
+ "clap",
  "criterion",
  "fixed",
  "noise",
