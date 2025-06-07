@@ -74,15 +74,9 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                             cell.flags |= do_brownian(id, id.z & 1 == 0, false, &cell, &neighbours);
                         }
                         _ => {
-                            let b_5 = (tick >> 5) ^ id.y as usize;
-                            let b_7 = tick >> 7 ^ !id.y as usize;
-                            let b_8 = tick.rotate_right(id.y as u32);
-                            let b_10 = tick.rotate_left(id.y as u32);
-                            let b_11 = tick >> 11;
-                            let b_13 = tick >> 13;
-                            let x = ((b_5 ^ b_7) ^ b_8) ^ b_10 & 1 == 0;
-                            let odd = (((b_7 ^ b_11) ^ b_13) ^ b_5) as i32 & 1;
-                            if x {
+                            rng.seed(tick as u64 ^ id.y as u64);
+                            let odd = rng.i32(0..=1);
+                            if rng.bool() {
                                 cell.flags |=
                                     do_brownian(id, id.x & 1 == odd, true, &cell, &neighbours);
                             } else {
