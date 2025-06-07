@@ -20,6 +20,7 @@ bevy = {version = "0.16"}
 block_meta = {path = "crates/block_macro"}
 bevy_console = "0.14.0"
 clap = "4.5.39"
+indexmap = "2.9.0"
 
 [features]
 default = []

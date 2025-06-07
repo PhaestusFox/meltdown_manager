@@ -66,7 +66,7 @@ pub fn run_game() {
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
-    app.add_plugins(ConsolePlugin);
+    app.add_plugins(console::plugin);
 
     // // dont know why some meshes are being detected as empty
     app.add_systems(Update, catch_failed_meshes);

@@ -5,7 +5,7 @@ use crate::voxels::{
     blocks::{self, Blocks},
     cellular_automata::{FixedNum, cells::CellFlags},
     map::ChunkData,
-    voxel_chunk::chunk::{Chunk, Neighbours},
+    voxel_chunk::*,
 };
 
 use super::*;
@@ -37,24 +37,31 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
             cell.set_phase();
         };
         if step.contains(Steps::GRAVITY) {
+            let block = cell.get_block();
             cell.flags.remove(CellFlags::SINK | CellFlags::FLOAT);
             if cell.flags.contains(CellFlags::IS_LIQUID) {
                 let down = neighbours.get(id.down());
-                if down.get_block() != Blocks::Void
+                let ob = down.get_block();
+                if ob != Blocks::Void // dont swap with void
+                    && ob != block // dont swap with same block
                     && down
                         .flags
-                        .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS)
+                        .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS) // liquids will swap with liquids and gases
                     && down.get_block().properties().density < cell.get_block().properties().density
+                // swawp if down is less dense
                 {
                     cell.flags.set(CellFlags::SINK, true);
                 }
             } else if cell.flags.contains(CellFlags::IS_GAS) {
                 let up = neighbours.get(id.up());
-                if up.get_block() != Blocks::Void
+                let ob = up.get_block();
+                if up.get_block() != Blocks::Void // dont swap with void
+                    && ob != block // dont swap with same block
                     && up
                         .flags
-                        .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS)
+                        .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS) // gases will swap with liquids and gases
                     && up.get_block().properties().density > cell.get_block().properties().density
+                // swap if up is more dense
                 {
                     cell.flags.set(CellFlags::FLOAT, true);
                 }

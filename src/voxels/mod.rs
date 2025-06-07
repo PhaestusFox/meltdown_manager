@@ -8,7 +8,7 @@ use blocks::Blocks;
 use cellular_automata::CellData;
 use map::CHUNK_VOL;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
-pub use voxel_chunk::chunk::{Chunk, ChunkId, NeighbourDirection, Neighbours};
+pub use voxel_chunk::*;
 
 use crate::voxels::{
     cellular_automata::{CellFlags, Cells, FixedNum, NextStep},

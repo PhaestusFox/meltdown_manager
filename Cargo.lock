@@ -3814,6 +3814,7 @@ dependencies = [
  "clap",
  "criterion",
  "fixed",
+ "indexmap",
  "noise",
  "phoxels",
  "rand 0.9.1",

@@ -16,10 +16,7 @@ use crate::{
         Blocks,
         cellular_automata::{self, Cells},
         spawn_test,
-        voxel_chunk::{
-            chunk::{ChunkId, ChunkManager},
-            prefab::ChunkPrefabLoader,
-        },
+        voxel_chunk::{ChunkId, chunk::ChunkManager, prefab::ChunkPrefabLoader},
     },
 };
 

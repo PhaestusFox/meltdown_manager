@@ -1,5 +1,7 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, scene::ron::de};
 use bevy_console::{ConsoleCommand, clap::Parser, reply, reply_failed};
+
+use crate::voxels::ChunkId;
 
 /// Highlight command that allows one to control the gizmo highlighting of the chunk you're currently in
 #[derive(Parser, ConsoleCommand)]
@@ -8,10 +10,18 @@ pub struct ChunkHighlightCommand {
     state: Option<String>,
 }
 
+#[derive(Default)]
+enum HighlightState {
+    #[default]
+    Off,
+    Select(ChunkId),
+    All,
+}
+
 // Our resource to control the chunk highlighting
 #[derive(Resource, Default)]
 pub struct ChunkHighlightState {
-    pub state: bool,
+    pub state: HighlightState,
 }
 
 pub fn chunk_highlight_command(
@@ -19,39 +29,23 @@ pub fn chunk_highlight_command(
     mut chunk_highlight_state: ResMut<ChunkHighlightState>,
 ) {
     if let Some(Ok(command)) = log.take() {
-        let new_state = match command.state.as_deref() {
-            Some("true") | Some("1") => Some(true),
-            Some("false") | Some("0") => Some(false),
-            Some(other) => {
-                reply_failed!(
-                    log,
-                    "Invalid value for state: '{}'. Please use 'true', 'false', '1', or '0'.",
-                    other
-                );
-                return;
-            }
-            None => None,
-        };
-
-        if let Some(state_value) = new_state {
-            chunk_highlight_state.state = state_value;
-            log.reply_ok(format!(
-                "Turned chunk highlighting state to {:?}",
-                chunk_highlight_state.state
-            ));
-        } else {
-            log.reply_ok(format!(
-                "Chunk highlighting is currently: {:?}",
-                chunk_highlight_state.state
-            ));
-        }
+        println!("Command received: {:?}", command.state);
     }
 }
 
 // Example system that would use the ChunkHighlightState
-fn apply_chunk_highlight(chunk_highlight_state: Res<ChunkHighlightState>) {
-    if chunk_highlight_state.state {
-        println!("Applying chunk highlighting...");
-    } else {
+pub fn apply_chunk_highlight(chunk_highlight_state: Res<ChunkHighlightState>) {
+    match chunk_highlight_state.state {
+        HighlightState::Off => {
+            // Logic to turn off highlighting
+        }
+        HighlightState::Select(chunk_id) => {
+            // Logic to highlight the specific chunk
+            info!("Highlighting chunk: {:?}", chunk_id);
+        }
+        HighlightState::All => {
+            // Logic to highlight all chunks
+            info!("Highlighting all chunks");
+        }
     }
 }

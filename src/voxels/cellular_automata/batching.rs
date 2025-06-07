@@ -210,6 +210,13 @@ pub fn plugin(app: &mut App) {
 
     app.add_systems(Update, toggle_pause);
     app.add_systems(Update, update_meshs.after(ApplyStep::PostApply));
+
+    // this is what increments the target tick once per 1/10th of a second
+    // should run try run before we start a tick
+    app.add_systems(
+        FixedPostUpdate,
+        inc_target.run_if(not(in_step(BatchingStep::Pause))),
+    );
 }
 
 fn set_prev(
@@ -389,7 +396,6 @@ fn start_ticking(
 
 fn toggle_pause(
     mut state: ResMut<Step>,
-    mut batching_strategy: ResMut<BatchingStrategy>,
     input: Res<ButtonInput<KeyCode>>,
     mut local: Local<BatchingStep>,
 ) {
@@ -424,7 +430,17 @@ fn start_tick(
     time: Res<Time<Real>>,
     mut local: Local<(u8, u32)>,
     mut tick: ResMut<VoxelTick>,
+    target: Res<TargetTick>,
 ) {
+    debug_assert!(
+        target.get() >= tick.get(),
+        "Target tick is in the past: {} < {}",
+        target.get(),
+        tick.get()
+    );
+    if tick.get() >= target.get() {
+        return;
+    }
     if time.delta_secs_f64() > TARGET_TICKTIME {
         warn!(
             "Tick time is too high: {}s, skipping tick",
@@ -440,10 +456,6 @@ fn start_tick(
     }
     tick.inc();
     step.set(BatchingStep::Run);
-}
-
-fn update_state(world: &mut World) {
-    world.run_schedule(StateTransition);
 }
 
 fn in_step(step: BatchingStep) -> impl Fn(Res<Step>) -> bool {
@@ -473,7 +485,7 @@ pub fn can_fuck_with_next_step(s: Res<Step>) -> bool {
 // unsafe impl<'w, 's> bevy::ecs::system::SystemParam for NextStepRead<'w, 's> {
 //     type State = QueryState<(ChunkId, Cells, NextStep)>;
 
-//     // type Item<'world, 'state> = (&'world ChunkId, &'world Cells, &'world NextStep);
+//    // type Item<'world, 'state> = (&'world ChunkId, &'world Cells, &'world NextStep);
 
 //     fn init_state(
 //         world: &mut World,
@@ -530,8 +542,8 @@ fn apply_physics(
     mut chunks: Query<(Entity, Option<&mut Cells>), With<NextStep>>,
     neighbours: Query<(Entity, &Neighbours)>,
     void_chunks: Res<VoidNeighbours>,
+    chunk_manager: Res<crate::voxels::ChunkManager>,
 ) {
-    println!("Applying physics to chunks with NextStep");
     let mut chunk_sets = Vec::new();
     for (entity, chunk) in &mut chunks {
         let mut to_apply = bevy::platform::collections::HashMap::new();
@@ -553,7 +565,9 @@ fn apply_physics(
         }
         chunk_sets.push((entity, to_apply));
     }
-
+    if chunk_sets.is_empty() {
+        return;
+    }
     println!("Applying physics to {} chunks", chunk_sets.len());
     let mut applied = bevy::platform::collections::HashSet::new();
 
@@ -610,4 +624,8 @@ fn update_meshs(
         }
         mesher.add_to_queue(entity);
     }
+}
+
+fn inc_target(mut target: ResMut<TargetTick>) {
+    target.inc();
 }
