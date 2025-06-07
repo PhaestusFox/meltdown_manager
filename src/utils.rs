@@ -105,13 +105,11 @@ impl EdgeIter {
 impl Iterator for EdgeIter {
     type Item = CellId;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.0.y >= CHUNK_SIZE as i32 {
+        if self.0.y >= CHUNK_SIZE {
             return None;
         }
         let edge = self.0;
-        if self.y == 0 || self.y == CHUNK_SIZE - 1 {
-            self.x += 1;
-        } else if self.z == 0 || self.z == CHUNK_SIZE - 1 {
+        if self.y == 0 || self.y == CHUNK_SIZE - 1 || self.z == 0 || self.z == CHUNK_SIZE - 1 {
             self.x += 1;
         } else {
             self.x += CHUNK_SIZE - 1;

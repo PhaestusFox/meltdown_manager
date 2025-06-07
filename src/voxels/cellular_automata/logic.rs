@@ -2,7 +2,7 @@ const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 const SUM_DIVISOR: FixedNum = FixedNum::lit("6.0");
 
 use crate::voxels::{
-    blocks::{self, Blocks},
+    blocks::Blocks,
     cellular_automata::{FixedNum, cells::CellFlags},
     map::ChunkData,
     voxel_chunk::*,
@@ -14,9 +14,11 @@ pub fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) {
     step_diag(chunk, neighbours, tick);
 }
 
+use fastrand::Rng;
+
 pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) -> CellData {
     let mut max = CellData::MIN;
-    let step = StepMode::from_bits_retain(tick);
+    let mut rng = Rng::new();
     for (id, data) in chunk {
         let Some(mut cell) = neighbours.get(id) else {
             #[cfg(debug_assertions)]
@@ -47,90 +49,54 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
             cell.energy += FixedNum::lit("10."); // hack to add uranium heat without changing my meta code
         }
 
-        if step.contains(StepMode::PHASE_CHANGE) {
-            cell.set_phase();
-        };
         cell.flags.remove(CellFlags::MOVE_ALL);
-
-        // if step.contains(StepMode::BROWNIAN)
-        //     && cell
-        //         .flags
-        //         .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS)
-        // // dont do brownian motion for solids
-        // {
-        //     for i in 0..6 {
-        //         let (target, flag) = match i {
-        //             0 => (id.up(), CellFlags::MOVE_UP),
-        //             1 => (id.down(), CellFlags::MOVE_DOWN),
-        //             2 => (id.left(), CellFlags::MOVE_LEFT),
-        //             3 => (id.right(), CellFlags::MOVE_RIGHT),
-        //             4 => (id.forward(), CellFlags::MOVE_FORWARD),
-        //             5 => (id.backward(), CellFlags::MOVE_BACK),
-        //             _ => unreachable!(),
-        //         };
-        //         let Some(target) = neighbours.get(target) else {
-        //             continue; // skip if target is out of bounds
-        //         };
-        //         if !target.can_move() {
-        //             continue; // skip if target cannot move
-        //         }
-        //         // break as soon as we have found a move
-        //         if cell.is_liquid() {
-        //             if i == 0 {
-        //                 // skip up on liquids
-        //                 continue;
-        //             }
-        //             if i == 1 {
-        //                 if target.is_gas() {
-        //                     cell.flags.insert(CellFlags::MOVE_DOWN);
-        //                     break;
-        //                 } else if target.properties().density < cell.properties().density {
-        //                     // liquids can move down if the target is a liquid with lower density
-        //                     cell.flags.insert(CellFlags::MOVE_DOWN);
-        //                     break;
-        //                 } else {
-        //                     // todo fixed rng choice?
-        //                 }
-        //             }
-        //         }
-        //         if cell.is_gas() {
-        //             if i == 1 {
-        //                 // skip down on gases
-        //                 continue;
-        //             }
-        //             if i == 0 {
-        //                 if target.is_liquid() {
-        //                     cell.flags.insert(CellFlags::MOVE_UP);
-        //                     break;
-        //                 } else if target.properties().density > cell.properties().density {
-        //                     // gases can move up if the target is a gas with higher density
-        //                     cell.flags.insert(CellFlags::MOVE_UP);
-        //                     break;
-        //                 } else {
-        //                     // todo fixed rng choice?
-        //                 }
-        //             }
-        //         }
-        //     }
-        // } else
-        if step.contains(StepMode::GRAVITY) {
-            // if neighbours.root() == ChunkId::new(2, 0, -3) && id.x < 5 && id.y == 0 && id.z == 0 {
-            //     println!(
-            //         "{}@{id:?} down: {:#?}",
-            //         cell.get_block(),
-            //         neighbours.get(id.down())
-            //     );
-            // }
-            // if neighbours.root() == ChunkId::new(2, -1, -3) && id.x < 5 && id.y == 29 && id.z == 0 {
-            //     println!(
-            //         "{}@{id:?} up: {:#?}",
-            //         cell.get_block(),
-            //         neighbours.get(id.up())
-            //     );
-            // }
-
-            let flag = check_gravity(id, &cell, &neighbours);
-            cell.flags |= flag;
+        match tick & 0b11 {
+            0b00 => {
+                cell.set_phase();
+            }
+            0b01 => {
+                cell.flags |= check_gravity(id, &cell, &neighbours);
+            }
+            0b10 => {
+                cell.set_phase();
+                if cell.can_move() {
+                    match (tick >> 2) & 0b111 {
+                        0b000 => {
+                            cell.flags |= do_brownian(id, id.x & 1 == 1, true, &cell, &neighbours);
+                        }
+                        0b010 => {
+                            cell.flags |= do_brownian(id, id.z & 1 == 1, false, &cell, &neighbours);
+                        }
+                        0b100 => {
+                            cell.flags |= do_brownian(id, id.x & 1 == 0, true, &cell, &neighbours);
+                        }
+                        0b110 => {
+                            cell.flags |= do_brownian(id, id.z & 1 == 0, false, &cell, &neighbours);
+                        }
+                        _ => {
+                            let b_5 = (tick >> 5) ^ id.y as usize;
+                            let b_7 = tick >> 7 ^ !id.y as usize;
+                            let b_8 = tick.rotate_right(id.y as u32);
+                            let b_10 = tick.rotate_left(id.y as u32);
+                            let b_11 = tick >> 11;
+                            let b_13 = tick >> 13;
+                            let x = ((b_5 ^ b_7) ^ b_8) ^ b_10 & 1 == 0;
+                            let odd = (((b_7 ^ b_11) ^ b_13) ^ b_5) as i32 & 1;
+                            if x {
+                                cell.flags |=
+                                    do_brownian(id, id.x & 1 == odd, true, &cell, &neighbours);
+                            } else {
+                                cell.flags |=
+                                    do_brownian(id, id.z & 1 == odd, false, &cell, &neighbours);
+                            }
+                        }
+                    }
+                }
+            }
+            0b11 => {
+                cell.flags |= check_gravity(id, &cell, &neighbours);
+            }
+            _ => unreachable!(),
         }
         #[cfg(debug_assertions)]
         max.max(&cell);
@@ -141,6 +107,7 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
 
 fn check_gravity(id: CellId, cell: &CellData, neighbours: &ChunkGared) -> CellFlags {
     if !cell.can_move() {
+        // check if the cell can move
         return CellFlags::empty();
     }
     if cell.is_liquid() {
@@ -174,13 +141,46 @@ fn check_gravity(id: CellId, cell: &CellData, neighbours: &ChunkGared) -> CellFl
     }
 }
 
+fn do_brownian(
+    id: CellId,
+    odd: bool,
+    x: bool,
+    cell: &CellData,
+    neighbours: &ChunkGared,
+) -> CellFlags {
+    let (target, will_move) = match (x, odd) {
+        (true, true) => (id.left(), CellFlags::MOVE_LEFT),
+        (true, false) => (id.right(), CellFlags::MOVE_RIGHT),
+        (false, true) => (id.forward(), CellFlags::MOVE_FORWARD),
+        (false, false) => (id.backward(), CellFlags::MOVE_BACK),
+    };
+    let Some(other) = neighbours.get(target) else {
+        return CellFlags::empty();
+    };
+    if !other.can_move() {
+        return CellFlags::empty();
+    }
+    if cell.is_gas() && other.is_liquid() || cell.is_liquid() && other.is_gas() {
+        will_move
+    } else {
+        // gases cannot move into liquids and vice versa
+        CellFlags::empty()
+    }
+}
+
 bitflags::bitflags! {
-    #[derive(Default, Clone, Copy)]
+    #[derive(Default, Clone, Copy, Debug)]
     pub struct StepMode: usize {
         const PHASE_CHANGE = 1;
-        const GRAVITY = 3;
-        const BROWNIAN = !(-1 << 3) as usize;
+        const GRAVITY = 1<<1;
+        const BROWNIAN = 1<<2;
         const PHYSICS = StepMode::GRAVITY.bits() | StepMode::BROWNIAN.bits();
+    }
+}
+
+impl std::fmt::Display for StepMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
     }
 }
 

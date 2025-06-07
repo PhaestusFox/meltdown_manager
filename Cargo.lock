@@ -3813,6 +3813,7 @@ dependencies = [
  "chunk_serde",
  "clap",
  "criterion",
+ "fastrand",
  "fixed",
  "indexmap",
  "noise",

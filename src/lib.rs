@@ -31,7 +31,7 @@ pub fn run_game() {
         .set(ImagePlugin::default_nearest());
 
     // if in debug build uncap framerate to make it easier to know if we have frame budgit
-    #[cfg(debug_assertions)]
+    // #[cfg(debug_assertions)]
     let default_plugins = default_plugins.set(WindowPlugin {
         primary_window: Some(Window {
             present_mode: bevy::window::PresentMode::AutoNoVsync,

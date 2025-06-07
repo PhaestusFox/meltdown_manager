@@ -312,7 +312,7 @@ impl CellData {
 
     #[inline(always)]
     pub const fn can_move(&self) -> bool {
-        self.is_gas() | self.is_liquid()
+        self.flags.intersects(CellFlags::CAN_MOVE)
     }
 }
 
@@ -328,6 +328,7 @@ bitflags::bitflags! {
         const MOVE_FORWARD = 5 << 2;
         const MOVE_BACK = 6 << 2;
         const MOVE_ALL = 7 << 2;
+        const CAN_MOVE = 3;
     }
 }
 impl CellData {

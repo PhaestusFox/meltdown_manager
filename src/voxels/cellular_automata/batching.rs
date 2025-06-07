@@ -201,7 +201,7 @@ pub fn plugin(app: &mut App) {
         Update,
         apply_physics
             .in_set(ApplyStep::PostApply)
-            .run_if(logic::is_step(logic::StepMode::PHYSICS)),
+            .run_if(logic::is_step(StepMode::from_bits_retain(2))),
     );
 
     app.add_systems(Update, toggle_pause);
@@ -444,15 +444,22 @@ fn toggle_pause(
 
 /// This system is used to determine if we need to recalculate the batching groups.
 fn batching_huristinc(
-    _strategy: Res<BatchingStrategy>,
     mut state: ResMut<Step>,
     time: Res<Time<Real>>,
     mut last: Local<u32>,
+    diagnostics: Res<DiagnosticsStore>,
 ) {
     if *last != time.elapsed_secs() as u32 {
-        info!("Triggering batching recalculation");
         *last = time.elapsed_secs() as u32;
-        state.set(BatchingStep::CalculateBatchs);
+        let Some(fps) = diagnostics
+            .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|v| v.average())
+        else {
+            return;
+        };
+        if fps < 30. {
+            state.set(BatchingStep::CalculateBatchs);
+        }
     }
 }
 
@@ -770,5 +777,11 @@ fn update_meshs(
 }
 
 fn inc_target(mut target: ResMut<TargetTick>) {
+    target.inc();
+    target.inc();
+    target.inc();
+    target.inc();
+    target.inc();
+    target.inc();
     target.inc();
 }
