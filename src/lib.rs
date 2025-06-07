@@ -62,9 +62,9 @@ pub fn run_game() {
         .add_systems(Startup, (setup, ui::ui::spawn_crosshair))
         .add_console_command::<ChunkHighlightCommand, _>(chunk_highlight_command);
 
-    #[cfg(debug_assertions)]
-    #[cfg(not(target_arch = "wasm32"))]
-    app.add_plugins(bevy_editor_pls::EditorPlugin::default());
+    // #[cfg(debug_assertions)]
+    // #[cfg(not(target_arch = "wasm32"))]
+    // app.add_plugins(bevy_editor_pls::EditorPlugin::default());
 
     app.add_plugins(console::plugin);
 

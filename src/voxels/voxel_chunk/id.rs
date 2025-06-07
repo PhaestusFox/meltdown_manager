@@ -150,6 +150,81 @@ impl ChunkId {
     pub fn to_translation(self) -> Vec3 {
         (self.0 * CHUNK_SIZE).as_vec3()
     }
+
+    pub fn from_str(str: &str) -> Result<Self, &'static str> {
+        let mut s = str.trim();
+        if s.is_empty() {
+            return Err("ChunkId cannot be empty");
+        }
+        if s.contains('(') && s.contains(')') {
+            let mut iter = s.split('(');
+            let _ = iter
+                .next()
+                .ok_or("Failed to get Preceding ( with trailing )")?;
+            s = iter
+                .next()
+                .ok_or("Failed to find value after (")?
+                .split(')')
+                .next()
+                .ok_or("Failed to find trailing )")?;
+        }
+        #[allow(unused_assignments)]
+        let mut x = None;
+        #[allow(unused_assignments)]
+        let mut y = None;
+        #[allow(unused_assignments)]
+        let mut z = None;
+        if s.contains(',') {
+            let mut split = s.split(',');
+            x = split.next();
+            y = split.next();
+            z = split.next();
+        } else if s.contains(|c: char| c.is_whitespace()) {
+            let mut split = s.split_whitespace();
+            x = split.next();
+            y = split.next();
+            z = split.next();
+        } else {
+            let mut change = false;
+            let mut split = s.split(move |c: char| {
+                if c.is_alphabetic() && !change {
+                    false
+                } else if (c.is_numeric() || c == '-' || c == ':') && !change {
+                    change = true;
+                    false
+                } else if c.is_alphabetic() && change {
+                    change = false;
+                    true
+                } else {
+                    false
+                }
+            });
+            x = split.next();
+            y = split.next();
+            z = split.next();
+        };
+
+        let x = x.ok_or("Failed to find x value")?.trim();
+        let y = y.ok_or("Failed to find y value")?.trim();
+        let z = z.ok_or("Failed to find z value")?.trim();
+
+        let x = x
+            .trim_start_matches(|c: char| !c.is_numeric() && c != '-')
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| "Failed to parse x")?;
+        let y = y
+            .trim_start_matches(|c: char| !c.is_numeric() && c != '-')
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| "Failed to parse y")?;
+        let z = z
+            .trim_start_matches(|c: char| !c.is_numeric() && c != '-')
+            .trim()
+            .parse::<i32>()
+            .map_err(|_| "Failed to parse z")?;
+        Ok(ChunkId(IVec3::new(x, y, z)))
+    }
 }
 
 #[derive(Component, Debug, Default)]

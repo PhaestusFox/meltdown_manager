@@ -4,10 +4,31 @@ use bevy_console::{ConsoleCommand, clap::Parser, reply, reply_failed};
 use crate::voxels::{ChunkId, ChunkManager};
 
 /// Highlight command that allows one to control the gizmo highlighting of the chunk you're currently in
-#[derive(Parser, ConsoleCommand)]
-#[command(name = "chunk_highlight")]
-pub struct ChunkHighlightCommand {
-    state: Option<String>,
+#[derive(Parser, ConsoleCommand, Debug)]
+#[command(
+    name = "chunk_highlight",
+    about = "Controls the chunk highlighting in the editor. Use 'toggle' to toggle highlighting, or 'set <true|false>' to set highlighting on or off."
+)]
+pub enum ChunkHighlightCommand {
+    Toggle,
+    On,
+    Off,
+    Select {
+        #[arg(value_name = "X", default_value = "0")]
+        x: i32,
+        #[arg(value_name = "Y", default_value = "0")]
+        y: i32,
+        #[arg(value_name = "Z", default_value = "0")]
+        z: i32,
+    },
+    Deselect {
+        #[arg(value_name = "X", default_value = "0")]
+        x: i32,
+        #[arg(value_name = "Y", default_value = "0")]
+        y: i32,
+        #[arg(value_name = "Z", default_value = "0")]
+        z: i32,
+    },
 }
 
 #[derive(Default)]
@@ -41,24 +62,31 @@ pub fn chunk_highlight_command(
     mut chunk_highlight_state: ResMut<ChunkHighlightState>,
     manager: Res<ChunkManager>,
 ) {
-    if let Some(Ok(command)) = log.take() {
-        match command.state.as_deref() {
-            Some("on") | Some("true") => {
+    if let Some(Ok(c)) = log.take() {
+        match c {
+            ChunkHighlightCommand::Toggle => chunk_highlight_state.state.toggle(),
+            ChunkHighlightCommand::On => {
                 chunk_highlight_state.state = HighlightState::All;
             }
-            Some("off") | Some("false") => {
+            ChunkHighlightCommand::Off => {
                 chunk_highlight_state.state = HighlightState::Off;
             }
-            Some(other) => {
-                if other.starts_with("select") {
-                    println!("Selecting chunk: {}", &other[7..]);
-                } else if other.starts_with("deselect") {
-                    println!("Deselecting chunk: {}", &other[9..]);
+            ChunkHighlightCommand::Select { x, y, z } => {
+                let to = ChunkId::new(x, y, z);
+                if manager.get_chunk(&to).is_some() {
+                    chunk_highlight_state.state = HighlightState::Select(to);
                 } else {
-                    println!("toggling chunk {}", other);
+                    reply_failed!(log, "Chunk not found: {:?}", to);
                 }
             }
-            None => chunk_highlight_state.state.toggle(),
+            ChunkHighlightCommand::Deselect { x, y, z } => {
+                let to = ChunkId::new(x, y, z);
+                if manager.get_chunk(&to).is_some() {
+                    chunk_highlight_state.state = HighlightState::Deselect(to);
+                } else {
+                    reply_failed!(log, "Chunk not found: {:?}", to);
+                }
+            }
         }
     }
 }
@@ -80,34 +108,24 @@ pub fn apply_chunk_highlight(
             }
         }
         HighlightState::Select(chunk_id) => {
-            // Logic to highlight the specific chunk
-            info!("Highlighting chunk: {:?}", chunk_id);
-            let Some(chunk) = chunk_manager.get_chunk(&chunk_id) else {
-                // reply_failed!("Chunk not found: {:?}", chunk_id);
-                return;
+            if let Some(chunk) = chunk_manager.get_chunk(&chunk_id) {
+                let mut g = GizmoAsset::new();
+                g.cuboid(
+                    Transform::from_scale(Vec3::splat(30.)).with_translation(Vec3::splat(15.)),
+                    Color::linear_rgb(0.1, 0.1, 1.),
+                );
+                commands.entity(chunk).insert(Gizmo {
+                    handle: gizmos.add(g),
+                    ..Default::default()
+                });
             };
-            let mut g = GizmoAsset::new();
-            g.cuboid(
-                Transform::from_scale(Vec3::splat(30.)),
-                Color::linear_rgb(0.1, 0.1, 1.),
-            );
-            commands.entity(chunk).insert(Gizmo {
-                handle: gizmos.add(g),
-                ..Default::default()
-            });
         }
         HighlightState::Deselect(chunk_id) => {
-            // Logic to deselect the specific chunk
-            info!("Deselecting chunk: {:?}", chunk_id);
             if let Some(entity) = chunk_manager.get_chunk(&chunk_id) {
                 commands.entity(entity).remove::<Gizmo>();
-            } else {
-                // reply_failed!("Chunk not found for deselection: {:?}", chunk_id);
             }
         }
         HighlightState::All => {
-            // Logic to highlight all chunks
-            info!("Highlighting all chunks");
             for entity in &all {
                 let mut g = GizmoAsset::new();
                 g.cuboid(

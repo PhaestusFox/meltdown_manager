@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use meltdown_manager::voxels::{blocks::Blocks, cellular_automata::*};
+use meltdown_manager::voxels::{ChunkId, blocks::Blocks, cellular_automata::*};
 use rand::{Rng, SeedableRng, seq::IndexedRandom};
 use std::hint::black_box;
 use strum::IntoEnumIterator;
@@ -51,6 +51,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("step empty", |b| {
         b.iter(|| {
             let mut chunk = gen_chunk();
+            #[cfg(debug_assertions)]
+            step(
+                ChunkIter::new(&mut chunk),
+                ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                0,
+            );
+            #[cfg(not(debug_assertions))]
             step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 0);
         })
     });
@@ -58,6 +65,13 @@ fn criterion_benchmark(c: &mut Criterion) {
         c.bench_with_input(BenchmarkId::new("Step Empty ({})", i), &i, |b, i| {
             b.iter(|| {
                 let mut chunk = gen_chunk();
+                #[cfg(debug_assertions)]
+                step(
+                    ChunkIter::new(&mut chunk),
+                    ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                    i,
+                );
+                #[cfg(not(debug_assertions))]
                 step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), i);
             })
         })
@@ -78,6 +92,26 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("step random", |b| {
         b.iter(|| {
             let mut chunk = gen_chunk();
+            #[cfg(debug_assertions)]
+            step(
+                ChunkIter::new(&mut chunk),
+                ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                0,
+            );
+            #[cfg(not(debug_assertions))]
+            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 0);
+        })
+    });
+    c.bench_function("step random phase change", |b| {
+        b.iter(|| {
+            let mut chunk = gen_chunk();
+            #[cfg(debug_assertions)]
+            step(
+                ChunkIter::new(&mut chunk),
+                ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                1,
+            );
+            #[cfg(not(debug_assertions))]
             step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 1);
         })
     });

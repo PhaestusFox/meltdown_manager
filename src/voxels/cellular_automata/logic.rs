@@ -19,12 +19,15 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
     let step = StepMode::from_bits_retain(tick);
     for (id, data) in chunk {
         let mut cell = neighbours.get(id);
-        debug_assert!(
-            cell.get_block() != Blocks::Void,
-            "Cell {:?} in {:?} is void",
-            id,
-            neighbours.root()
-        );
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(
+                cell.get_block() != Blocks::Void,
+                "Cell {:?} in {:?} is void",
+                id,
+                neighbours.root()
+            );
+        }
         for neighbour_id in id.neighbours() {
             let neighbour_data = neighbours.get(neighbour_id);
             let t1 = cell.temperature();
