@@ -16,12 +16,11 @@ use crate::voxels::{
 
 pub use map::{CHUNK_SIZE, CHUNK_VOL};
 
-// set to 16 for final test
-const BX: i32 = 3;
-// set to 16 for final test
-const BZ: i32 = 3;
-// set to 16 for final test
-const BY: i32 = 1;
+#[cfg(target_arch = "wasm32")]
+const MAP_SIZE: UVec3 = UVec3::new(5, 1, 5);
+
+#[cfg(not(target_arch = "wasm32"))]
+const MAP_SIZE: UVec3 = UVec3::new(7, 2, 7);
 
 fn spawn_test(
     mut commands: Commands,
@@ -45,13 +44,14 @@ fn spawn_test(
             Visibility::Visible,
         ))
         .with_children(|root| {
-            for x in -BX..=BX {
-                for z in -BZ..=BZ {
-                    for y in -BY..=BY {
+            let y = MAP_SIZE.y as i32;
+            for x in 0..MAP_SIZE.x {
+                for z in 0..MAP_SIZE.z {
+                    for y in -y..1 {
                         chunk_count += 1;
                         total_voxels += CHUNK_VOL;
                         root.spawn((
-                            ChunkId::new(x, y, z),
+                            ChunkId::new(x as i32, y, z as i32),
                             Chunk::<CellData>::empty(),
                             // Mesh3d(Default::default()),
                             generator.clone(),

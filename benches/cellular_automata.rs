@@ -61,20 +61,24 @@ fn criterion_benchmark(c: &mut Criterion) {
             step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 0);
         })
     });
-    for i in 0..10 {
-        c.bench_with_input(BenchmarkId::new("Step Empty ({})", i), &i, |b, i| {
-            b.iter(|| {
-                let mut chunk = gen_chunk();
-                #[cfg(debug_assertions)]
-                step(
-                    ChunkIter::new(&mut chunk),
-                    ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
-                    i,
-                );
-                #[cfg(not(debug_assertions))]
-                step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), i);
-            })
-        })
+    for i in [0, 1, 3, 7] {
+        c.bench_with_input(
+            BenchmarkId::new("Step Empty", StepMode::from_bits_retain(i)),
+            &i,
+            |b, i| {
+                b.iter(|| {
+                    let mut chunk = gen_chunk();
+                    #[cfg(debug_assertions)]
+                    step(
+                        ChunkIter::new(&mut chunk),
+                        ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                        *i,
+                    );
+                    #[cfg(not(debug_assertions))]
+                    step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), *i);
+                })
+            },
+        );
     }
 
     chunks[0] = gen_random_chunk();
@@ -110,6 +114,20 @@ fn criterion_benchmark(c: &mut Criterion) {
                 ChunkIter::new(&mut chunk),
                 ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
                 1,
+            );
+            #[cfg(not(debug_assertions))]
+            step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 1);
+        })
+    });
+
+    c.bench_function("step random gravity", |b| {
+        b.iter(|| {
+            let mut chunk = gen_chunk();
+            #[cfg(debug_assertions)]
+            step(
+                ChunkIter::new(&mut chunk),
+                ChunkGared::new(dummy, ChunkId::new(0, 0, 0)),
+                3,
             );
             #[cfg(not(debug_assertions))]
             step(ChunkIter::new(&mut chunk), ChunkGared::new(dummy), 1);

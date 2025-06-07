@@ -4,13 +4,13 @@ mod consts;
 mod logic;
 mod util;
 
+use crate::voxels::VoidNeighbours;
 pub use crate::voxels::map::ChunkData;
-use crate::voxels::{VoidNeighbours, cellular_automata::logic::StepMode};
 pub use batching::{BatchingStep, can_fuck_with_next_step, can_modify_next_step, can_modify_world};
 use bevy::prelude::*;
 pub use cells::{CellData, CellFlags};
 pub use consts::*;
-pub use logic::step;
+pub use logic::{StepMode, step};
 pub use util::*;
 
 mod debugging;
