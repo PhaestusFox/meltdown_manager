@@ -1,18 +1,11 @@
-use std::{ops::DerefMut, time::Instant};
-
-use bevy::{
-    diagnostic::DiagnosticsStore,
-    ecs::{entity::EntityIndexSet, entity_disabling, schedule::ScheduleLabel},
-    prelude::*,
-};
-use bitflags::Flags;
+use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*};
 
 use crate::{
     TARGET_TICKTIME,
     diagnostics::ChunkCount,
     utils::BlockIter,
     voxels::{
-        Chunk, ChunkId, Neighbours,
+        Neighbours,
         blocks::Blocks,
         cellular_automata::*,
         map::{CHUNK_SIZE, ChunkData},
@@ -38,8 +31,6 @@ impl PartialEq for BatchingStep {
 
 #[derive(Resource)]
 struct BatchingStrategy {
-    current_step_start: Option<Instant>,
-    longest_step: f32,
     batch_size: usize,
     groups: Vec<EntityIndexSet>,
     active_groups: usize,
@@ -136,8 +127,6 @@ impl FromWorld for BatchingStrategy {
         world.init_resource::<NextBatch>();
         world.init_resource::<Step>();
         BatchingStrategy {
-            current_step_start: None,
-            longest_step: 0.0,
             batch_size: 0,
             groups: Vec::new(),
             active_groups: 0,
@@ -205,7 +194,7 @@ pub fn plugin(app: &mut App) {
         Update,
         apply_physics
             .in_set(ApplyStep::PostApply)
-            .run_if(logic::is_step(logic::Steps::GRAVITY)),
+            .run_if(logic::is_step(logic::StepMode::PHYSICS)),
     );
 
     app.add_systems(Update, toggle_pause);
@@ -542,6 +531,7 @@ fn apply_physics(
     mut chunks: Query<(Entity, Option<&mut Cells>), With<NextStep>>,
     neighbours: Query<(Entity, &Neighbours)>,
     void_chunks: Res<VoidNeighbours>,
+    tick: Res<VoxelTick>,
     chunk_manager: Res<crate::voxels::ChunkManager>,
 ) {
     let mut chunk_sets = Vec::new();
@@ -554,11 +544,17 @@ fn apply_physics(
         for (x, y, z) in BlockIter::<CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE>::new() {
             let block = chunk.get_block(x, y, z);
             let cell = CellId::new(x, y, z);
-            if block.flags.contains(CellFlags::SINK) {
-                to_apply.insert(cell, cell.down());
-            } else if block.flags.contains(CellFlags::FLOAT) {
-                to_apply.insert(cell.up(), cell);
-            }
+            let target = match block.flags.intersection(CellFlags::MOVE_ALL) {
+                CellFlags::MOVE_LEFT => cell.left(),
+                CellFlags::MOVE_RIGHT => cell.right(),
+                CellFlags::MOVE_FORWARD => cell.forward(),
+                CellFlags::MOVE_BACK => cell.backward(),
+                CellFlags::MOVE_DOWN => cell.down(),
+                CellFlags::MOVE_UP => cell.up(),
+                _ => continue, // no physics to apply
+            };
+            let (a, b) = CellId::order(cell, target);
+            to_apply.insert(a, b);
         }
         if to_apply.is_empty() {
             continue;
@@ -570,7 +566,6 @@ fn apply_physics(
     }
     println!("Applying physics to {} chunks", chunk_sets.len());
     let mut applied = bevy::platform::collections::HashSet::new();
-
     for (entity, to_apply) in chunk_sets {
         applied.clear();
         if let Ok((_, neighbours)) = neighbours.get(entity) {
@@ -598,7 +593,6 @@ fn apply_physics(
             let mut garde = MutChunkGared::new(chunks);
             for (a, b) in to_apply {
                 if applied.contains(&a) || applied.contains(&b) {
-                    warn!("tried to swap already applied cells: {:?} and {:?}", a, b);
                     continue;
                 }
                 applied.insert(a);

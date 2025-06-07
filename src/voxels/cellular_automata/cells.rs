@@ -5,6 +5,7 @@ use crate::voxels::blocks::Blocks;
 use super::FixedNum;
 use super::*;
 use bevy::prelude::*;
+use block_meta::BlockProperties;
 use chunk_serde::BinSerializer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,22 +17,22 @@ pub struct CellData {
     pub flags: CellFlags,
 }
 
-pub struct BlockProperties {
-    pub heat: FixedNum,
-    pub conductivity: FixedNum,
-    pub mass: FixedNum,
+// pub struct BlockProperties {
+//     pub heat: FixedNum,
+//     pub conductivity: FixedNum,
+//     pub mass: FixedNum,
 
-    // For heat
-    /// units of energy per degree Kelvin
-    pub heat_capacity: FixedNum,
-    /// units of energy per degree Kelvin per TimeStep
-    pub thermal_conductivity: FixedNum,
+//     // For heat
+//     /// units of energy per degree Kelvin
+//     pub heat_capacity: FixedNum,
+//     /// units of energy per degree Kelvin per TimeStep
+//     pub thermal_conductivity: FixedNum,
 
-    pub melting_point: FixedNum,
-    pub fusion_energy: FixedNum,
-    pub boiling_point: FixedNum,
-    pub vaporization_energy: FixedNum,
-}
+//     pub melting_point: FixedNum,
+//     pub fusion_energy: FixedNum,
+//     pub boiling_point: FixedNum,
+//     pub vaporization_energy: FixedNum,
+// }
 
 impl chunk_serde::Serialize for CellData {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
@@ -291,18 +292,42 @@ impl CellData {
         }
     }
 
-    pub fn lookup_g(&self, block: Blocks) -> FixedNum {
+    pub const fn lookup_g(&self, block: Blocks) -> FixedNum {
         self.block.meta().conductivity(block as u8)
+    }
+
+    pub const fn properties(&self) -> &'static BlockProperties {
+        self.block.properties()
+    }
+
+    #[inline(always)]
+    pub const fn is_liquid(&self) -> bool {
+        self.flags.contains(CellFlags::IS_LIQUID)
+    }
+
+    #[inline(always)]
+    pub const fn is_gas(&self) -> bool {
+        self.flags.contains(CellFlags::IS_GAS)
+    }
+
+    #[inline(always)]
+    pub const fn can_move(&self) -> bool {
+        self.is_gas() | self.is_liquid()
     }
 }
 
 bitflags::bitflags! {
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
     pub struct CellFlags: u8 {
-        const IS_LIQUID = 0b00000001;
-        const IS_GAS = 0b00000010;
-        const SINK = 0b00000100;
-        const FLOAT = 0b00001000;
+        const IS_LIQUID = 1 << 0;
+        const IS_GAS = 1 << 1;
+        const MOVE_UP = 1 << 2;
+        const MOVE_DOWN = 2 << 2;
+        const MOVE_LEFT = 3 << 2;
+        const MOVE_RIGHT = 4 << 2;
+        const MOVE_FORWARD = 5 << 2;
+        const MOVE_BACK = 6 << 2;
+        const MOVE_ALL = 7 << 2;
     }
 }
 impl CellData {

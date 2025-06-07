@@ -77,6 +77,26 @@ impl CellId {
     pub fn up(&self) -> CellId {
         CellId::new(self.0.x, self.0.y + 1, self.0.z)
     }
+    pub fn left(&self) -> CellId {
+        CellId::new(self.0.x - 1, self.0.y, self.0.z)
+    }
+    pub fn right(&self) -> CellId {
+        CellId::new(self.0.x + 1, self.0.y, self.0.z)
+    }
+    pub fn forward(&self) -> CellId {
+        CellId::new(self.0.x, self.0.y, self.0.z + 1)
+    }
+    pub fn backward(&self) -> CellId {
+        CellId::new(self.0.x, self.0.y, self.0.z - 1)
+    }
+
+    pub(crate) fn order(cell: CellId, target: CellId) -> (CellId, CellId) {
+        if cell.x < target.x || cell.z < target.z || cell.y < target.y {
+            (cell, target)
+        } else {
+            (target, cell)
+        }
+    }
 }
 
 pub struct ChunkIter<'a> {

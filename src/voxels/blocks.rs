@@ -2,8 +2,6 @@ use bevy::prelude::*;
 use chunk_serde::BinSerializer;
 use phoxels::core::BlockId;
 
-use super::cellular_automata::BlockProperties;
-
 #[derive(
     Clone,
     Copy,

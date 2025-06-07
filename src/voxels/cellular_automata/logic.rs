@@ -16,7 +16,7 @@ pub fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) {
 
 pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) -> CellData {
     let mut max = CellData::MIN;
-    let step = Steps::from_bits_retain(tick);
+    let step = StepMode::from_bits_retain(tick);
     for (id, data) in chunk {
         let mut cell = neighbours.get(id);
         debug_assert!(cell.get_block() != Blocks::Void, "Cell at {:?} is void", id);
@@ -33,12 +33,62 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
             cell.energy += FixedNum::lit("10."); // hack to add uranium heat without changing my meta code
         }
 
-        if step.contains(Steps::PHASE_CHANGE) {
+        if step.contains(StepMode::PHASE_CHANGE) {
             cell.set_phase();
         };
-        if step.contains(Steps::GRAVITY) {
+        cell.flags.remove(CellFlags::MOVE_ALL);
+
+        if step.contains(StepMode::BROWNIAN)
+            && cell
+                .flags
+                .intersects(CellFlags::IS_LIQUID | CellFlags::IS_GAS)
+        // dont do brownian motion for solids
+        {
+            for i in 0..6 {
+                let (target, flag) = match i {
+                    0 => (id.up(), CellFlags::MOVE_UP),
+                    1 => (id.down(), CellFlags::MOVE_DOWN),
+                    2 => (id.left(), CellFlags::MOVE_LEFT),
+                    3 => (id.right(), CellFlags::MOVE_RIGHT),
+                    4 => (id.forward(), CellFlags::MOVE_FORWARD),
+                    5 => (id.backward(), CellFlags::MOVE_BACK),
+                    _ => unreachable!(),
+                };
+                let target = neighbours.get(target);
+                // break as soon as we have found a move
+                if cell.is_liquid() {
+                    if i == 0 // if moving up
+                        && target.is_liquid() // check target is liquid --- dont want liquids floating on gases
+                        && target.properties().density >= cell.properties().density
+                    // check density --- can only swap if decity is same or lower then target
+                    {
+                        cell.flags.insert(CellFlags::MOVE_UP);
+                        break;
+                    } else if i != 0
+                        && target.can_move() // check if target is liquid or gas
+                        && target.properties().density <= cell.properties().density
+                    // check density --- can only swap if decity is same or higher then target
+                    {
+                        cell.flags.insert(flag);
+                        break;
+                    }
+                } else if i == 1 // if moving down
+                && target.is_gas() // check target is gas --- dont want gases sinking in liquids
+                    && target.properties().density <= cell.properties().density
+                {
+                    cell.flags.insert(CellFlags::MOVE_DOWN);
+                    break;
+                } else if i != 1
+                    && target.can_move() // check if target is liquid or gas
+                    && target.properties().density >= cell.properties().density
+                {
+                    cell.flags.insert(flag);
+                    break;
+                }
+            }
+        } else if step.contains(StepMode::GRAVITY) {
+            cell.flags.remove(CellFlags::MOVE_ALL);
             let block = cell.get_block();
-            cell.flags.remove(CellFlags::SINK | CellFlags::FLOAT);
             if cell.flags.contains(CellFlags::IS_LIQUID) {
                 let down = neighbours.get(id.down());
                 let ob = down.get_block();
@@ -50,7 +100,7 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                     && down.get_block().properties().density < cell.get_block().properties().density
                 // swawp if down is less dense
                 {
-                    cell.flags.set(CellFlags::SINK, true);
+                    cell.flags.set(CellFlags::MOVE_DOWN, true);
                 }
             } else if cell.flags.contains(CellFlags::IS_GAS) {
                 let up = neighbours.get(id.up());
@@ -63,7 +113,7 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
                     && up.get_block().properties().density > cell.get_block().properties().density
                 // swap if up is more dense
                 {
-                    cell.flags.set(CellFlags::FLOAT, true);
+                    cell.flags.set(CellFlags::MOVE_UP, true);
                 }
             }
         }
@@ -76,12 +126,14 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
 
 bitflags::bitflags! {
     #[derive(Default, Clone, Copy)]
-    pub struct Steps: usize {
+    pub struct StepMode: usize {
         const PHASE_CHANGE = 1;
-        const GRAVITY = 2;
+        const GRAVITY = 3;
+        const BROWNIAN = !(-1 << 3) as usize;
+        const PHYSICS = StepMode::GRAVITY.bits() | StepMode::BROWNIAN.bits();
     }
 }
 
-pub fn is_step(step: Steps) -> impl Fn(Res<VoxelTick>) -> bool {
-    move |tick: Res<VoxelTick>| Steps::from_bits_retain(tick.get()).intersects(step)
+pub fn is_step(step: StepMode) -> impl Fn(Res<VoxelTick>) -> bool {
+    move |tick: Res<VoxelTick>| StepMode::from_bits_retain(tick.get()).intersects(step)
 }
