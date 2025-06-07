@@ -1,4 +1,11 @@
-use bevy::{diagnostic::DiagnosticsStore, ecs::entity::EntityIndexSet, prelude::*, scene::ron::de};
+use std::collections::HashMap;
+
+use bevy::{
+    diagnostic::DiagnosticsStore,
+    ecs::entity::{EntityHashSet, EntityIndexSet},
+    prelude::*,
+    scene::ron::de,
+};
 
 use crate::{
     TARGET_TICKTIME,
@@ -563,126 +570,17 @@ pub enum ApplyStep {
 }
 
 fn apply_physics(
-    mut chunks: Query<Option<&mut Cells>, With<NextStep>>,
+    mut chunks: Query<(Entity, Option<&mut Cells>), With<NextStep>>,
     neighbours: Query<(Entity, &ChunkId, &Neighbours)>,
     void_chunks: Res<VoidNeighbours>,
     chunk_manager: Res<crate::voxels::ChunkManager>,
 ) {
-    let mut chunk_sets = Vec::new();
-    // let (send, read) = std::sync::mpsc::channel();
+    let (send, read) = std::sync::mpsc::channel();
     // find all changes that want to be applied
-    for entity in chunk_manager.iter() {
-        let Ok((_, id, neighbours)) = neighbours.get(entity) else {
-            warn!("Failed to get neighbours for chunk {entity:?}, skipping");
-            continue;
-        };
-        let mut c_entitys = [
-            entity,
-            void_chunks.0[0],
-            void_chunks.0[1],
-            void_chunks.0[2],
-            void_chunks.0[3],
-            void_chunks.0[4],
-            void_chunks.0[5],
-        ];
-        for (d, n) in neighbours.iter() {
-            c_entitys[d as usize + 1] = n;
-        }
-
-        let Ok(chunks) = chunks.get_many(c_entitys) else {
-            warn!("Failed to get chunk {entity:?} for physics application, skipping");
-            continue;
-        };
-
-        #[cfg(debug_assertions)]
-        let garde = ChunkGared::new(chunks, *id);
-        #[cfg(not(debug_assertions))]
-        let garde = ChunkGared::new(chunks);
-
-        let mut to_core = bevy::platform::collections::HashMap::new();
-        let mut to_edge = bevy::platform::collections::HashMap::new();
-        for cell in CoreIter::new() {
-            let Some(block) = garde.get(cell) else {
-                warn!("Failed to get block at {cell:?} for chunk {entity:?}, skipping");
-                continue;
-            };
-            let (target, direction) = match block.flags.intersection(CellFlags::MOVE_ALL) {
-                // CellFlags::MOVE_LEFT => (cell.left(), CellFlags::MOVE_RIGHT),
-                CellFlags::MOVE_RIGHT => (cell.right(), CellFlags::MOVE_LEFT),
-                CellFlags::MOVE_FORWARD => (cell.forward(), CellFlags::MOVE_BACK),
-                // CellFlags::MOVE_BACK => (cell.backward(), CellFlags::MOVE_FORWARD),
-                // CellFlags::MOVE_DOWN => (cell.down(), CellFlags::MOVE_UP),
-                CellFlags::MOVE_UP => (cell.up(), CellFlags::MOVE_DOWN),
-                _ => continue, // no physics to apply
-            };
-            let Some(other) = garde.get(target) else {
-                warn!(
-                    "Failed to get {cell:?} {:?}: {target:?} for chunk {entity:?}, skipping",
-                    block.flags
-                );
-                continue; // target block is out of bounds
-            };
-            let mut other = other.flags;
-            other.remove(CellFlags::IS_GAS | CellFlags::IS_LIQUID);
-            if other.bits() != direction.bits() {
-                continue; // target block is not trying to swap with this block
-            }
-            let (a, b) = CellId::order(cell, target);
-            to_core.insert(a, b);
-        }
-        for cell in EdgeIter::new() {
-            let Some(block) = garde.get(cell) else {
-                warn!("Failed to get block at {cell:?} for chunk {entity:?}, skipping");
-                continue;
-            };
-            let (target, direction) = match block.flags.intersection(CellFlags::MOVE_ALL) {
-                // CellFlags::MOVE_LEFT => (cell.left(), CellFlags::MOVE_RIGHT),
-                CellFlags::MOVE_RIGHT => (cell.right(), CellFlags::MOVE_LEFT),
-                CellFlags::MOVE_FORWARD => (cell.forward(), CellFlags::MOVE_BACK),
-                // CellFlags::MOVE_BACK => (cell.backward(), CellFlags::MOVE_FORWARD),
-                // CellFlags::MOVE_DOWN => (cell.down(), CellFlags::MOVE_UP),
-                CellFlags::MOVE_UP => (cell.up(), CellFlags::MOVE_DOWN),
-                _ => continue, // no physics to apply
-            };
-            let Some(other) = garde.get(target) else {
-                warn!(
-                    "Failed to get {cell:?} {:?}: {target:?} for chunk {entity:?}, skipping",
-                    block.flags
-                );
-                continue; // target block is out of bounds
-            };
-            let mut other = other.flags;
-            other.remove(CellFlags::IS_GAS | CellFlags::IS_LIQUID);
-            if other.bits() != direction.bits() {
-                continue; // target block is not trying to swap with this block
-            }
-            let (a, b) = CellId::order(cell, target);
-            to_edge.insert(a, b);
-        }
-        if to_core.is_empty() && to_edge.is_empty() {
-            continue; // no physics to apply
-        }
-        let to_core = if to_core.is_empty() {
-            None
-        } else {
-            Some(to_core)
-        };
-        let to_edge = if to_edge.is_empty() {
-            None
-        } else {
-            Some(to_edge)
-        };
-        chunk_sets.push((entity, (to_core, to_edge)));
-    }
-    if chunk_sets.is_empty() {
-        return;
-    }
-    // println!("Applying physics to {} chunks", chunk_sets.len());
-    let mut applied = bevy::platform::collections::HashSet::new();
-    for (entity, (to_core, to_edge)) in chunk_sets {
-        applied.clear();
-        if let Ok((_, _, neighbours)) = neighbours.get(entity) {
-            let mut chunk_entitys = [
+    neighbours
+        .par_iter_many(chunk_manager.iter())
+        .for_each(|(entity, id, neighbours)| {
+            let mut c_entitys = [
                 entity,
                 void_chunks.0[0],
                 void_chunks.0[1],
@@ -691,43 +589,162 @@ fn apply_physics(
                 void_chunks.0[4],
                 void_chunks.0[5],
             ];
-            for (n, e) in neighbours.iter() {
-                chunk_entitys[n as usize + 1] = e;
+            for (d, n) in neighbours.iter() {
+                c_entitys[d as usize + 1] = n;
             }
-            let Ok(chunks) = chunks.get_many_mut(chunk_entitys) else {
-                warn!(
-                    "Failed to get chunks for entity {entity:?}; Added Void chunks to allow edge chunks to work"
-                );
-                continue;
+
+            let Ok(chunks) = chunks.get_many(c_entitys) else {
+                warn!("Failed to get chunk {entity:?} for physics application, skipping");
+                return;
             };
 
-            let mut garde = MutChunkGared::new(chunks);
-            let iter = match (to_core, to_edge) {
-                (None, None) => continue,
-                (None, Some(e)) => e,
-                (Some(c), None) => c,
-                (Some(c), Some(e)) => {
-                    for (a, b) in c {
-                        if applied.contains(&a) || applied.contains(&b) {
-                            continue;
-                        }
-                        applied.insert(a);
-                        applied.insert(b);
-                        garde.swap(a, b);
-                    }
-                    e
-                }
-            };
+            let chunks = chunks.map(|c| c.1);
 
-            for (a, b) in iter {
-                if applied.contains(&a) || applied.contains(&b) {
-                    println!("Skipping already applied physics for {a:?} and {b:?}");
+            #[cfg(debug_assertions)]
+            let garde = ChunkGared::new(chunks, *id);
+            #[cfg(not(debug_assertions))]
+            let garde = ChunkGared::new(chunks);
+
+            let mut to_core = bevy::platform::collections::HashMap::new();
+            let mut to_edge = bevy::platform::collections::HashMap::new();
+            for cell in CoreIter::new() {
+                let Some(block) = garde.get(cell) else {
+                    warn!("Failed to get block at {cell:?} for chunk {entity:?}, skipping");
                     continue;
+                };
+                let (target, direction) = match block.flags.intersection(CellFlags::MOVE_ALL) {
+                    // CellFlags::MOVE_LEFT => (cell.left(), CellFlags::MOVE_RIGHT),
+                    CellFlags::MOVE_RIGHT => (cell.right(), CellFlags::MOVE_LEFT),
+                    CellFlags::MOVE_FORWARD => (cell.forward(), CellFlags::MOVE_BACK),
+                    // CellFlags::MOVE_BACK => (cell.backward(), CellFlags::MOVE_FORWARD),
+                    // CellFlags::MOVE_DOWN => (cell.down(), CellFlags::MOVE_UP),
+                    CellFlags::MOVE_UP => (cell.up(), CellFlags::MOVE_DOWN),
+                    _ => continue, // no physics to apply
+                };
+                let Some(other) = garde.get(target) else {
+                    warn!(
+                        "Failed to get {cell:?} {:?}: {target:?} for chunk {entity:?}, skipping",
+                        block.flags
+                    );
+                    continue; // target block is out of bounds
+                };
+                let mut other = other.flags;
+                other.remove(CellFlags::IS_GAS | CellFlags::IS_LIQUID);
+                if other.bits() != direction.bits() {
+                    continue; // target block is not trying to swap with this block
                 }
-                applied.insert(a);
-                applied.insert(b);
-                garde.swap(a, b);
+                let (a, b) = CellId::order(cell, target);
+                to_core.insert(a, b);
             }
+            for cell in EdgeIter::new() {
+                let Some(block) = garde.get(cell) else {
+                    warn!("Failed to get block at {cell:?} for chunk {entity:?}, skipping");
+                    continue;
+                };
+                let (target, direction) = match block.flags.intersection(CellFlags::MOVE_ALL) {
+                    // CellFlags::MOVE_LEFT => (cell.left(), CellFlags::MOVE_RIGHT),
+                    CellFlags::MOVE_RIGHT => (cell.right(), CellFlags::MOVE_LEFT),
+                    CellFlags::MOVE_FORWARD => (cell.forward(), CellFlags::MOVE_BACK),
+                    // CellFlags::MOVE_BACK => (cell.backward(), CellFlags::MOVE_FORWARD),
+                    // CellFlags::MOVE_DOWN => (cell.down(), CellFlags::MOVE_UP),
+                    CellFlags::MOVE_UP => (cell.up(), CellFlags::MOVE_DOWN),
+                    _ => continue, // no physics to apply
+                };
+                let Some(other) = garde.get(target) else {
+                    warn!(
+                        "Failed to get {cell:?} {:?}: {target:?} for chunk {entity:?}, skipping",
+                        block.flags
+                    );
+                    continue; // target block is out of bounds
+                };
+                let mut other = other.flags;
+                other.remove(CellFlags::IS_GAS | CellFlags::IS_LIQUID);
+                if other.bits() != direction.bits() {
+                    continue; // target block is not trying to swap with this block
+                }
+                let (a, b) = CellId::order(cell, target);
+                to_edge.insert(a, b);
+            }
+            if to_core.is_empty() && to_edge.is_empty() {
+                return; // no physics to apply
+            }
+            let to_core = if to_core.is_empty() {
+                None
+            } else {
+                Some(to_core)
+            };
+            let to_edge = if to_edge.is_empty() {
+                None
+            } else {
+                Some(to_edge)
+            };
+            let _ = send.send((entity, (to_core, to_edge)));
+        });
+    let mut add_core = HashMap::new();
+    let mut add_edge = HashMap::new();
+
+    for (target, (core, edge)) in read.try_iter() {
+        if let Some(core) = core {
+            add_core.insert(target, core);
+        }
+        if let Some(edge) = edge {
+            add_edge.insert(target, edge);
+        }
+    }
+    // println!("Applying physics to {} chunks", chunk_sets.len());
+    let mut applied = bevy::platform::collections::HashSet::new();
+
+    chunks
+        .par_iter_many_unique_mut(chunk_manager.iter().collect::<EntityHashSet>())
+        .for_each(|(entity, cell)| {
+            let Some(mut cells) = cell else {
+                warn!("Failed to get chunk cells; this means a chunk in the manager is not loaded correctly");
+                return;
+            };
+            let Some(to_apply) = add_core.get(&entity) else {
+                return; // no physics to apply to core of this chunk
+            };
+
+            for (a, b) in to_apply.iter() {
+                cells.swap(a, b);
+            }
+        });
+    for edge in chunk_manager.iter() {
+        let Ok((_, id, neighbours)) = neighbours.get(edge) else {
+            warn!("Failed to get neighbours for chunk {edge:?}, skipping physics application");
+            continue; // no neighbours for this chunk
+        };
+        let mut c_target = [
+            edge,
+            void_chunks.0[0],
+            void_chunks.0[1],
+            void_chunks.0[2],
+            void_chunks.0[3],
+            void_chunks.0[4],
+            void_chunks.0[5],
+        ];
+        for (n, e) in neighbours.iter() {
+            c_target[n as usize + 1] = e;
+        }
+
+        let Ok(chunks) = chunks.get_many_mut(c_target) else {
+            warn!(
+                "Failed to get chunks for entity {edge:?}; Added Void chunks to allow edge chunks to work"
+            );
+            continue; // no chunks to apply physics to
+        };
+
+        let chunks = chunks.map(|c| c.1);
+
+        let mut garde = MutChunkGared::new(chunks);
+
+        let Some(to_apply) = add_edge.remove(&edge) else {
+            continue; // no physics to apply to edge of this chunk
+        };
+        for (a, b) in to_apply {
+            applied.insert(a);
+            applied.insert(b);
+            garde.swap(a, b);
         }
     }
 }

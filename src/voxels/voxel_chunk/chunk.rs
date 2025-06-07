@@ -3,7 +3,7 @@ use chunk_serde::CompressedChunkData;
 
 use crate::voxels::{
     blocks::Blocks,
-    cellular_automata::{CellData, NextStep},
+    cellular_automata::{CellData, CellId, NextStep},
     map::{CHUNK_AREA, CHUNK_SIZE, CHUNK_VOL, ChunkData},
     voxel_chunk::ChunkId,
 };
@@ -82,6 +82,21 @@ where
             is_single_block: self.is_single_block,
             blocks: self.blocks.clone(),
         }
+    }
+}
+
+impl<T> Chunk<T> {
+    pub fn swap(&mut self, a: &CellId, b: &CellId) {
+        #[cfg(debug_assertions)]
+        if !Self::in_bounds(a.x, a.y, a.z) || !Self::in_bounds(b.x, b.y, b.z) {
+            panic!(
+                "Tried to swap out of bounds cells: ({}, {}, {}) and ({}, {}, {})",
+                a.x, a.y, a.z, b.x, b.y, b.z
+            );
+        }
+        let index_a = Self::index(a.x, a.y, a.z);
+        let index_b = Self::index(b.x, b.y, b.z);
+        self.blocks.swap(index_a, index_b);
     }
 }
 
