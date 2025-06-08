@@ -62,7 +62,6 @@ impl ChunkManager {
             .map_err(ChunkManagerError::SerdeError)?;
         serde.insert(&tick).map_err(ChunkManagerError::SerdeError)?;
         let len = self.len() as u64;
-        assert!(len < 300);
         serde.insert(&len).map_err(ChunkManagerError::SerdeError)?;
         for (id, entity) in self.map.iter() {
             let cells = data.get(*entity)?;
@@ -138,6 +137,141 @@ impl ChunkManager {
                     .insert(cells);
             } else {
                 commands.spawn((cells, id));
+            }
+        }
+        commands.insert_resource(VoxelTick::new(tick));
+        commands.insert_resource(TargetTick::new(tick));
+        commands.insert_resource(VoxelStep::default());
+        Ok(())
+    }
+
+    pub fn save_compressed_chunk(
+        &self,
+        chunk: ChunkId,
+        data: &Query<&Chunk<CellData>>,
+    ) -> Result<Vec<u8>, ChunkManagerError> {
+        let Some(entity) = self.get_chunk(&chunk) else {
+            return Err(ChunkManagerError::NoEntity(chunk));
+        };
+        let chunk_data = data.get(entity)?;
+        let mut min = Chunk::<BlockType>::empty();
+        for (i, b) in chunk_data.blocks.iter().enumerate() {
+            min.set_by_index(i, b.get_block_type());
+        }
+        let compressed = min.compress();
+        let mut serde = chunk_serde::BinSerializer::new();
+        serde
+            .insert(b"PhoxK")
+            .map_err(ChunkManagerError::SerdeError)?;
+        serde
+            .insert(&compressed)
+            .map_err(ChunkManagerError::SerdeError)?;
+        Ok(serde.finalize())
+    }
+
+    pub fn save_compressed_world(
+        &self,
+        data: &Query<&Chunk<CellData>>,
+        tick: u64,
+    ) -> Result<Vec<u8>, ChunkManagerError> {
+        let mut serde = chunk_serde::BinSerializer::new();
+        serde
+            .insert(b"PhoxM")
+            .map_err(ChunkManagerError::SerdeError)?;
+        let len = self.len() as u64;
+        serde.insert(&tick).map_err(ChunkManagerError::SerdeError)?;
+        serde.insert(&len).map_err(ChunkManagerError::SerdeError)?;
+        let mut min = Chunk::<BlockType>::empty();
+        for (id, entity) in self.map.iter() {
+            let chunk_data = data.get(*entity)?;
+            serde.insert(id).map_err(ChunkManagerError::SerdeError)?;
+            for (i, b) in chunk_data.blocks.iter().enumerate() {
+                min.set_by_index(i, b.get_block_type());
+            }
+            let compressed = min.compress();
+            serde
+                .insert(&compressed)
+                .map_err(ChunkManagerError::SerdeError)?;
+        }
+        Ok(serde.finalize())
+    }
+
+    pub fn load_compressed_chunk(
+        &self,
+        id: ChunkId,
+        data: &[u8],
+        commands: &mut Commands,
+    ) -> Result<(), ChunkManagerError> {
+        let mut serde = chunk_serde::BinDeSerializer::new(data);
+        let magic = serde
+            .extract::<[u8; 5]>()
+            .map_err(ChunkManagerError::SerdeError)?;
+        if magic != *b"PhoxK" {
+            return Err(ChunkManagerError::SerdeError(
+                bevy::ecs::error::BevyError::from("Attempted to load world as chunk data"),
+            ));
+        }
+        let compressed = serde
+            .extract::<CompressedChunkData<BlockType>>()
+            .map_err(ChunkManagerError::SerdeError)?;
+        let chunk_data = Chunk::<BlockType>::decompress(&compressed);
+        let mut chunk = Chunk::empty();
+        for (i, b) in chunk_data.blocks.iter().enumerate() {
+            let mut block = CellData::default();
+            block.set_block_type(*b);
+            chunk.set_by_index(i, block);
+        }
+        if let Some(entity) = self.get_chunk(&id) {
+            commands.entity(entity).remove::<NextStep>().insert(chunk);
+        } else {
+            commands.spawn((chunk, id));
+        }
+        Ok(())
+    }
+
+    pub fn load_compressed_world(
+        &self,
+        data: &[u8],
+        commands: &mut Commands,
+    ) -> Result<(), ChunkManagerError> {
+        let mut serde = chunk_serde::BinDeSerializer::new(data);
+        let magic = serde
+            .extract::<[u8; 5]>()
+            .map_err(ChunkManagerError::SerdeError)
+            .unwrap();
+        if magic != *b"PhoxM" {
+            panic!("Attempted to load chunk data as world data");
+        }
+        let tick = serde
+            .extract::<u64>()
+            .map_err(ChunkManagerError::SerdeError)
+            .unwrap();
+        let len = serde
+            .extract::<u64>()
+            .map_err(ChunkManagerError::SerdeError)
+            .unwrap();
+
+        for _ in 0..len {
+            let id = serde
+                .extract::<ChunkId>()
+                .map_err(ChunkManagerError::SerdeError)?;
+            let compressed = serde
+                .extract::<CompressedChunkData<BlockType>>()
+                .map_err(ChunkManagerError::SerdeError)?;
+            let chunk_data = Chunk::<BlockType>::decompress(&compressed);
+            let mut chunk = Chunk::empty();
+            for (i, b) in chunk_data.blocks.iter().enumerate() {
+                let mut block = CellData::default();
+                block.set_block_type(*b);
+                chunk.set_by_index(i, block);
+            }
+            if let Some(entity) = self.get_chunk(&id) {
+                commands
+                    .entity(entity)
+                    .remove::<(NextStep, ChunkData)>()
+                    .insert(chunk);
+            } else {
+                commands.spawn((chunk, id));
             }
         }
         commands.insert_resource(VoxelTick::new(tick));

@@ -19,6 +19,8 @@ struct FragmentOutput {
     @location(0) color: vec4<f32>,
 }
 
+const CHUNK_SIZE: f32 = f32(CHUNK_SIZE_U32);
+const CHUNK_SIZE_U32: u32 = 10;
 
 // we can import items from shader modules in the assets folder with a quoted path
 const COLOR_MULTIPLIER: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.);
@@ -28,7 +30,7 @@ const COLOR_MULTIPLIER: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.);
 @group(2) @binding(2) var material_color_sampler: sampler;
 @group(2) @binding(3) var<uniform> face_overrides: array<FaceOverride, 256 / 4>;
 // @group(2) @binding(4) var<uniform> data: array<u32>;
-@group(2) @binding(4) var<storage, read> data: array<FaceOverride, 3375>;
+@group(2) @binding(4) var<storage, read> data: array<FaceOverride, (CHUNK_SIZE_U32 * CHUNK_SIZE_U32 * CHUNK_SIZE_U32) / 8>;
 @group(2) @binding(5) var<uniform> flags: u32;
 
 struct FaceOverride {
@@ -41,6 +43,7 @@ struct FaceOverride {
 const light: vec3<f32> = vec3(-0.57735027, 0.57735027, 0.57735027);
 
 const r30: f32 = 1.0 / 29.0;
+const rc: f32 = 1.0 / CHUNK_SIZE;
 const r255: f32 = 1.0 / 255.0;
 
 @fragment
@@ -128,35 +131,24 @@ fn fragment(
         axis += 1;
     }
 
-    var fx = in.world_position.x % 30.0;
+    var fx = in.world_position.x % CHUNK_SIZE;
     if fx < 0 {
-        fx += 30;
+        fx += CHUNK_SIZE;
     }
-    var fy = in.world_position.y % 30.0;
+    var fy = in.world_position.y % CHUNK_SIZE;
     if fy < 0 {
-        fy += 30;
+        fy += CHUNK_SIZE;
     }
-    var fz = in.world_position.z % 30.0;
+    var fz = in.world_position.z % CHUNK_SIZE;
     if fz < 0 {
-        fz += 30;
+        fz += CHUNK_SIZE;
     }
     let ix = u32(fx);
     let iy = u32(fy);
     let iz = u32(fz);
-    let aindex = in.chunk_pos.x + in.chunk_pos.z * 30 + in.chunk_pos.y * 30 * 30;
-    // let aindex = ix + iz * 30 + iy * 30 * 30;
+    let aindex = in.chunk_pos.x + in.chunk_pos.z * CHUNK_SIZE_U32 + in.chunk_pos.y * CHUNK_SIZE_U32 * CHUNK_SIZE_U32;
     let ai = i32(aindex % 8);
 
-    // if ix == 0 {
-    //     let ii = iz + iy * 30;
-    //     let v = data[ii/4].block_a;
-    //     if v < 256 {
-    //         discard;
-    //     }
-    //     return vec4<f32>(0., f32(iy) * r30, f32(iz) * r30, 1.0);
-    // } else {
-    //     discard;
-    // }
     let autos = data[aindex / 8];
     var adata: u32;
     
@@ -178,6 +170,7 @@ fn fragment(
     var ts = textureSample(material_color_texture, material_color_sampler, vec2(uvx, uvy));
     let a = ts.a;
     ts = vec4(0);
+    ts.r = temp * rc;
 
     if (flags & (1<<9)) > 0 {
         if phase == 0 {
@@ -189,10 +182,10 @@ fn fragment(
         if (phase & 2) > 0 {
             ts.r = 1.;
         }
-    } else {
-        ts.r = f32(in.chunk_pos.x) * r30;
-        ts.b = f32(in.chunk_pos.z) * r30;
-        ts.g = f32(in.chunk_pos.y) * r30;
+    } else if (flags & (1<<8)) > 0 {
+        ts.r = f32(in.chunk_pos.x) * rc;
+        ts.b = f32(in.chunk_pos.z) * rc;
+        ts.g = f32(in.chunk_pos.y) * rc;
     }
 
     // ts = vec4<f32>(0.0);

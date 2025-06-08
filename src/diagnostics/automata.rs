@@ -895,8 +895,6 @@ fn dummy_diagnostics() -> AutomitaDiagnosticChunk {
     let mut dummmy = CellData::default();
     for (x, y, z) in BlockIter::new() {
         dummmy.energy = FixedNum::from_num(8 * x);
-        dummmy.charge = FixedNum::from_num(8 * y);
-        dummmy.presure = FixedNum::from_num(8 * z);
         chunk.set_cell(x, y, z, dummmy);
     }
     extract_component(&chunk, U8)

@@ -14,8 +14,6 @@ pub struct CellData {
     pub energy: FixedNum,
     tempreture: FixedNum,
     density: FixedNum,
-    pub charge: FixedNum,
-    pub presure: FixedNum,
     pub flags: CellFlags,
 }
 
@@ -42,21 +40,13 @@ impl chunk_serde::Serialize for CellData {
         for byte in self.energy.to_be_bytes() {
             vec.push(byte);
         }
-        for byte in self.charge.to_be_bytes() {
-            vec.push(byte);
-        }
-        for byte in self.presure.to_be_bytes() {
-            vec.push(byte);
-        }
-        Ok(13)
+        Ok(5)
     }
 
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         let mut out = CellData {
             block: BlockType::from_repr(slice[0]).unwrap_or(BlockType::Void),
             energy: FixedNum::from_be_bytes(slice[1..5].try_into().unwrap()),
-            charge: FixedNum::from_be_bytes(slice[5..9].try_into().unwrap()),
-            presure: FixedNum::from_be_bytes(slice[9..13].try_into().unwrap()),
             tempreture: FixedNum::ONE, // Will be set later
             density: FixedNum::ONE,    // Will be set later
             flags: CellFlags::empty(),
@@ -64,7 +54,7 @@ impl chunk_serde::Serialize for CellData {
         out.set_tempreture();
         out.set_phase();
         out.set_density();
-        Ok((out, 13))
+        Ok((out, 5))
     }
 
     // fn insert_str(&self, serializer: &mut chunk_serde::StrSerializer) -> Result<usize> {
@@ -113,10 +103,8 @@ impl Default for CellData {
         CellData {
             block: BlockType::Air,
             energy: AIR_AT_20C.0,
-            presure: ATM_1,
             tempreture: FixedNum::lit("293.15"), // 20C in Kelvin
-            charge: STD_CHARGE,
-            density: FixedNum::lit("1.0"), // Default density
+            density: FixedNum::lit("1.0"),       // Default density
             flags: AIR_AT_20C.1,
         }
     }
@@ -135,8 +123,6 @@ impl CellData {
         CellData {
             block,
             energy: at.0,
-            charge: FixedNum::ZERO,
-            presure: ATM_1,
             density: block.properties().density.saturating_mul(d),
             tempreture: k,
             flags: at.1,
@@ -159,28 +145,20 @@ impl CellData {
 
     pub fn min(&mut self, other: &Self) {
         self.energy = self.energy.min(other.energy);
-        self.charge = self.charge.min(other.charge);
-        self.presure = self.presure.min(other.presure);
     }
 
     pub fn max(&mut self, other: &Self) {
         self.energy = self.energy.max(other.energy);
-        self.charge = self.charge.max(other.charge);
-        self.presure = self.presure.max(other.presure);
     }
 
     pub fn any_zero(&self) -> bool {
-        self.energy.is_zero() | self.charge.is_zero() | self.presure.is_zero()
+        self.energy.is_zero()
     }
 
     pub fn normalize(&self, range: FixedNum) -> CellData {
         let mut out = *self;
         out.energy /= range;
         out.energy = out.energy.clamp(FixedNum::ZERO, FixedNum::ONE);
-        out.charge /= range;
-        out.charge = out.charge.clamp(FixedNum::ZERO, FixedNum::ONE);
-        out.presure /= range;
-        out.presure = out.presure.clamp(FixedNum::ZERO, FixedNum::ONE);
         out
     }
 }
@@ -196,8 +174,6 @@ impl Sub for CellData {
 impl SubAssign for CellData {
     fn sub_assign(&mut self, rhs: Self) {
         self.energy -= rhs.energy;
-        self.presure -= rhs.presure;
-        self.charge -= rhs.charge;
     }
 }
 
@@ -212,16 +188,12 @@ impl Div for CellData {
 impl DivAssign for CellData {
     fn div_assign(&mut self, rhs: Self) {
         self.energy /= rhs.energy;
-        self.charge /= rhs.charge;
-        self.presure /= rhs.presure;
     }
 }
 
 impl MulAssign for CellData {
     fn mul_assign(&mut self, rhs: Self) {
         self.energy *= rhs.energy;
-        self.presure *= rhs.presure;
-        self.charge *= rhs.charge;
     }
 }
 
@@ -237,8 +209,6 @@ impl<T: fixed::traits::ToFixed> MulAssign<T> for CellData {
     fn mul_assign(&mut self, rhs: T) {
         let rhs = FixedNum::from_num(rhs);
         self.energy *= rhs;
-        self.presure *= rhs;
-        self.charge *= rhs;
     }
 }
 
@@ -253,16 +223,12 @@ impl<T: fixed::traits::ToFixed> Mul<T> for CellData {
 impl CellData {
     pub fn clamp(&mut self, min: FixedNum, max: FixedNum) {
         self.energy = self.energy.clamp(min, max);
-        self.charge = self.charge.clamp(min, max);
-        self.presure = self.presure.clamp(min, max);
     }
 }
 
 impl AddAssign for CellData {
     fn add_assign(&mut self, rhs: Self) {
         self.energy += rhs.energy;
-        self.presure += rhs.presure;
-        self.charge += rhs.charge;
     }
 }
 
@@ -278,8 +244,6 @@ impl<T: fixed::traits::ToFixed> DivAssign<T> for CellData {
     fn div_assign(&mut self, rhs: T) {
         let rhs = FixedNum::from_num(rhs);
         self.energy /= rhs;
-        self.presure /= rhs;
-        self.charge /= rhs;
     }
 }
 
@@ -362,17 +326,13 @@ impl CellData {
         CellData {
             block: BlockType::Void,
             energy: val,
-            charge: val,
-            presure: val,
             ..CellData::THE_VOID
         }
     }
 
     pub const THE_VOID: CellData = CellData {
         block: BlockType::Void,
-        energy: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
+        energy: FixedNum::ONE,
         flags: CellFlags::IS_GAS,
         density: FixedNum::ONE,
         tempreture: FixedNum::lit("271.15"),
@@ -381,8 +341,6 @@ impl CellData {
     pub const MIN: CellData = CellData {
         block: BlockType::Void,
         energy: FixedNum::MIN,
-        charge: FixedNum::MIN,
-        presure: FixedNum::MIN,
         flags: CellFlags::empty(),
         ..CellData::THE_VOID
     };
@@ -390,8 +348,6 @@ impl CellData {
     pub const MAX: CellData = CellData {
         block: BlockType::Void,
         energy: FixedNum::MAX,
-        charge: FixedNum::MAX,
-        presure: FixedNum::MAX,
         flags: CellFlags::IS_GAS,
         ..CellData::THE_VOID
     };
@@ -399,8 +355,6 @@ impl CellData {
     pub const ZERO: CellData = CellData {
         block: BlockType::Void,
         energy: FixedNum::ZERO,
-        charge: FixedNum::ZERO,
-        presure: FixedNum::ZERO,
         flags: CellFlags::empty(),
         ..CellData::THE_VOID
     };

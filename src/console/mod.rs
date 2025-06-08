@@ -11,7 +11,9 @@ pub fn plugin(app: &mut App) {
     .add_console_command::<commands::NeighborsCommand, _>(commands::chunk_neighbore_command)
     .add_console_command::<commands::RedrawCommand, _>(commands::chunk_redraw_command)
     .add_console_command::<commands::SaveCommand, _>(commands::chunk_save_command)
-    .add_console_command::<commands::LoadCommand, _>(commands::chunk_load_command);
+    .add_console_command::<commands::LoadCommand, _>(commands::chunk_load_command)
+    .add_console_command::<commands::Export, _>(commands::chunk_export_command)
+    .add_console_command::<commands::Import, _>(commands::chunk_import_command);
 
     commands::init(app);
 }

@@ -6,7 +6,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     utils::BlockIter,
-    voxels::{CHUNK_VOL, block::BlockType, voxel_chunk::chunk::Chunk},
+    voxels::{CHUNK_SIZE, CHUNK_VOL, block::BlockType, voxel_chunk::chunk::Chunk},
 };
 use chunk_serde::{BinSerializer, CompressedChunkData};
 
@@ -157,9 +157,9 @@ fn fuzz_compression() {
     let block: Vec<_> = BlockType::iter().collect();
     for _ in 0..27000 {
         chunk.set_cell(
-            rng.random_range(0..30),
-            rng.random_range(0..30),
-            rng.random_range(0..30),
+            rng.random_range(0..CHUNK_SIZE),
+            rng.random_range(0..CHUNK_SIZE),
+            rng.random_range(0..CHUNK_SIZE),
             *block.choose(&mut rng).unwrap(),
         );
         let comp = chunk.compress();
@@ -191,9 +191,9 @@ fn fuzz_serde() {
     }
     for _ in 0..27000 {
         chunk.set_cell(
-            rng.random_range(0..30),
-            rng.random_range(0..30),
-            rng.random_range(0..30),
+            rng.random_range(0..CHUNK_SIZE),
+            rng.random_range(0..CHUNK_SIZE),
+            rng.random_range(0..CHUNK_SIZE),
             *block.choose(&mut rng).unwrap(),
         );
         test!(chunk);

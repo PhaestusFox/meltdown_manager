@@ -10,6 +10,8 @@ use crate::voxels::map::ChunkData;
 
 pub mod voxels;
 
+pub use utils::BlockIter;
+
 mod console;
 mod diagnostics;
 mod player;

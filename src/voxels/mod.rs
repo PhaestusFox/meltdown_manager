@@ -16,10 +16,10 @@ use crate::voxels::{
 pub use map::{CHUNK_SIZE, CHUNK_VOL};
 
 #[cfg(target_arch = "wasm32")]
-const MAP_SIZE: UVec3 = UVec3::new(5, 1, 5);
+const MAP_SIZE: UVec3 = UVec3::new(15, 3, 15);
 
 #[cfg(not(target_arch = "wasm32"))]
-const MAP_SIZE: UVec3 = UVec3::new(7, 2, 7);
+const MAP_SIZE: UVec3 = UVec3::new(21, 6, 21);
 
 #[derive(Resource)]
 pub struct VoxleMaterialHandle(Handle<VoxelMaterial>);
@@ -51,8 +51,6 @@ fn spawn_test(
 ) {
     let mut chunk_count = 0;
     let mut total_voxels = 0;
-
-    // return;
     commands
         .spawn((
             Name::new("Chunks"),

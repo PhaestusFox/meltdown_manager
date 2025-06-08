@@ -15,7 +15,7 @@ use crate::{
 
 pub type ChunkData = phoxels::prelude::ChunkData<BlockType>;
 
-pub const CHUNK_SIZE: i32 = 30;
+pub const CHUNK_SIZE: i32 = 10;
 pub const CHUNK_AREA: i32 = CHUNK_SIZE * CHUNK_SIZE;
 pub const CHUNK_VOL: usize = (CHUNK_AREA * CHUNK_SIZE) as usize;
 
@@ -45,7 +45,7 @@ pub fn map_plugin(app: &mut App) {
                 //     //     chunk.set_block(x as u32, y as u32, z as u32, Blocks::Air);
                 //     // }
                 //     // for y in 0..(h - start_y).min(30) {
-                //     //     let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 10.)
+                //     //     let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 10.)e
                 //     //         % num_blocks) as u8;
                 //     //     let block = Blocks::from_repr(r).unwrap_or_default();
                 //     //     debug_assert!(block != Blocks::Void);
@@ -57,9 +57,9 @@ pub fn map_plugin(app: &mut App) {
                     let b = if start_y + y >= h {
                         BlockType::Air
                     } else {
-                        let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 10.)
-                            % num_blocks) as u8;
-                        BlockType::from_repr(r).unwrap_or_default()
+                        // let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 3.) % num_blocks)
+                        //     as u8;
+                        BlockType::from_repr(1).unwrap_or_default()
                     };
                     debug_assert!(b != BlockType::Void);
                     chunk.set_block(x as u32, y as u32, z as u32, b);

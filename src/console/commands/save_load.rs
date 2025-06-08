@@ -44,14 +44,6 @@ pub enum LoadCommand {
     },
 }
 
-// Our resource to control the chunk highlighting
-#[derive(Resource, Default)]
-pub struct RedrawState {
-    target: Option<Entity>,
-}
-
-pub fn init(app: &mut App) {}
-
 pub fn chunk_save_command(
     mut log: ConsoleCommand<SaveCommand>,
     manager: Res<ChunkManager>,

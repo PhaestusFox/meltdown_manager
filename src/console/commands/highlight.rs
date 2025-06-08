@@ -3,7 +3,7 @@ use bevy_console::{ConsoleCommand, clap::Parser, reply, reply_failed};
 
 use crate::{
     player::Player,
-    voxels::{ChunkId, ChunkManager},
+    voxels::{CHUNK_SIZE, ChunkId, ChunkManager},
 };
 
 /// Highlight command that allows one to control the gizmo highlighting of the chunk you're currently in
@@ -129,7 +129,8 @@ pub fn apply_chunk_highlight(
             if let Some(chunk) = chunk_manager.get_chunk(&chunk_id) {
                 let mut g = GizmoAsset::new();
                 g.cuboid(
-                    Transform::from_scale(Vec3::splat(30.)).with_translation(Vec3::splat(15.)),
+                    Transform::from_scale(Vec3::splat(CHUNK_SIZE as f32))
+                        .with_translation(Vec3::splat((CHUNK_SIZE / 2) as f32)),
                     Color::linear_rgb(0.1, 0.1, 1.),
                 );
                 commands.entity(chunk).insert(Gizmo {
@@ -147,7 +148,8 @@ pub fn apply_chunk_highlight(
             for entity in &all {
                 let mut g = GizmoAsset::new();
                 g.cuboid(
-                    Transform::from_scale(Vec3::splat(30.)).with_translation(Vec3::splat(15.)),
+                    Transform::from_scale(Vec3::splat(CHUNK_SIZE as f32))
+                        .with_translation(Vec3::splat((CHUNK_SIZE / 2) as f32)),
                     Color::linear_rgb(0.1, 1., 0.1),
                 );
                 commands.entity(entity).insert(Gizmo {
