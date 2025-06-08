@@ -774,13 +774,16 @@ fn update_diagnostics(
             }
             continue;
         }
-        buffer.set_data(extract_component(data, max.get_max()));
+        buffer.set_data(extract_component(
+            data,
+            max.get_max().max(FixedNum::lit("1000.")),
+        ));
     }
 }
 
 fn add_diagnostics(
     chunks: Query<
-        (Entity, &Cells, &MeshMaterial3d<VoxelMaterial>),
+        (Entity, &MeshMaterial3d<VoxelMaterial>),
         (Without<MeshMaterial3d<DebugMaterial>>,),
     >,
     mut commands: Commands,
@@ -790,7 +793,7 @@ fn add_diagnostics(
     mut local: Local<Handle<ShaderStorageBuffer>>,
     state: Res<TabState>,
 ) {
-    for (entity, data, base) in &chunks {
+    for (entity, base) in &chunks {
         // let comp = extract_component(data);
         let comp = dummy_diagnostics();
         let mut buffer = ShaderStorageBuffer::default();
@@ -808,7 +811,8 @@ fn add_diagnostics(
                 overrides: base.overrides,
                 data: storage_buffers.add(ShaderStorageBuffer::from(dummy_diagnostics())),
                 settings: state.mode.bits(),
-            })));
+            })))
+            .remove::<MeshMaterial3d<VoxelMaterial>>();
     }
 }
 

@@ -23,6 +23,7 @@ pub enum Blocks {
     Steel,
     Uranium,
     Water,
+
     Void,
 }
 
