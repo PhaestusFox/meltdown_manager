@@ -26,8 +26,8 @@ bevy_pkv = "0.13"
 base64 = "0.22.1"
 
 [features]
-# default = []
-default = ["file_watcher"]
+default = []
+# default = ["file_watcher"]
 file_watcher = ["bevy/file_watcher"]
 sync = []
 
