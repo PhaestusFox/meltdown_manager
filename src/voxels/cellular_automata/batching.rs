@@ -780,8 +780,4 @@ fn inc_target(mut target: ResMut<TargetTick>) {
     target.inc();
     target.inc();
     target.inc();
-    target.inc();
-    target.inc();
-    target.inc();
-    target.inc();
 }

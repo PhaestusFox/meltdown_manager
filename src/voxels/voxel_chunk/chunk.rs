@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use bevy::{diagnostic::DiagnosticsStore, math::IVec3, platform::collections::HashMap, prelude::*};
 use chunk_serde::CompressedChunkData;
 
@@ -31,7 +33,7 @@ impl ChunkManager {
         self.map.get(id).cloned()
     }
 
-    fn save_chunk(
+    pub fn save_chunk(
         &self,
         chunk: ChunkId,
         data: &Query<&Cells>,
@@ -40,11 +42,18 @@ impl ChunkManager {
         let entity = self
             .get_chunk(&chunk)
             .ok_or(ChunkManagerError::NoEntity(chunk))?;
-        let (blocks, automata) = data.get(entity)?;
-        let blocks = Chunk::<BlockType>::from(blocks);
-        let blocks = blocks.compress();
-        let automata = automata.compress();
-        todo!();
+        let cells = data.get(entity)?;
+        let compressed = cells.compress();
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)?;
+        let mut serde = chunk_serde::BinSerializer::new();
+        serde
+            .insert(&compressed)
+            .map_err(ChunkManagerError::SerdeError)?;
+        file.write_all(&serde.finalize())?;
         Ok(())
     }
 
@@ -71,11 +80,15 @@ impl ChunkManager {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum ChunkManagerError {
+pub enum ChunkManagerError {
     #[error("Failed to find Entity for {0}")]
     NoEntity(ChunkId),
     #[error("Failed to get data from Query: {0}")]
     NoData(#[from] bevy::ecs::query::QueryEntityError),
+    #[error("Failed to open file: {0}")]
+    FileOpen(#[from] std::io::Error),
+    #[error("Failed to Sererialise: {0}")]
+    SerdeError(bevy::ecs::error::BevyError),
 }
 
 #[derive(Component, Debug)]
