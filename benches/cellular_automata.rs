@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use meltdown_manager::voxels::{ChunkId, blocks::BlockType, cellular_automata::*};
+use meltdown_manager::voxels::{ChunkId, block::BlockType, cellular_automata::*};
 use rand::{Rng, SeedableRng, seq::IndexedRandom};
 use std::{hint::black_box, time::Duration};
 use strum::IntoEnumIterator;

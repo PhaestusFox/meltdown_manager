@@ -6,7 +6,9 @@ mod util;
 
 use crate::voxels::VoidNeighbours;
 pub use crate::voxels::map::ChunkData;
-pub use batching::{BatchingStep, can_fuck_with_next_step, can_modify_next_step, can_modify_world};
+pub use batching::{
+    BatchingStep, VoxelStep, can_fuck_with_next_step, can_modify_next_step, can_modify_world,
+};
 use bevy::prelude::*;
 pub use cells::{CellData, CellFlags};
 pub use consts::*;
@@ -27,17 +29,21 @@ pub fn plugin(app: &mut App) {
 }
 
 #[derive(Resource, Default, Reflect)]
-pub struct VoxelTick(usize);
+pub struct VoxelTick(u64);
 
 #[derive(Resource, Default, Reflect)]
-pub struct TargetTick(usize);
+pub struct TargetTick(u64);
 
 impl VoxelTick {
+    pub fn new(tick: u64) -> Self {
+        Self(tick)
+    }
+
     fn inc(&mut self) {
         self.0 += 1;
     }
 
-    fn get(&self) -> usize {
+    pub fn get(&self) -> u64 {
         self.0
     }
 
@@ -47,15 +53,18 @@ impl VoxelTick {
 }
 
 impl TargetTick {
-    pub fn get(&self) -> usize {
+    pub fn new(tick: u64) -> Self {
+        Self(tick)
+    }
+    pub fn get(&self) -> u64 {
         self.0
     }
 
-    fn inc(&mut self) {
+    pub fn inc(&mut self) {
         self.0 += 1;
     }
 
-    pub fn set(&mut self, to: usize) {
+    pub fn set(&mut self, to: u64) {
         warn!("Target Time was set; only do this for testing at the moment!");
         self.0 = to;
     }

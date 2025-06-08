@@ -1,11 +1,10 @@
-pub mod blocks;
+pub mod block;
 pub mod cellular_automata;
 pub mod map;
 mod voxel_chunk;
 
 use bevy::prelude::*;
-use blocks::BlockType;
-use cellular_automata::CellData;
+use block::BlockType;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
 pub use voxel_chunk::*;
 
@@ -22,17 +21,34 @@ const MAP_SIZE: UVec3 = UVec3::new(5, 1, 5);
 #[cfg(not(target_arch = "wasm32"))]
 const MAP_SIZE: UVec3 = UVec3::new(7, 2, 7);
 
+#[derive(Resource)]
+pub struct VoxleMaterialHandle(Handle<VoxelMaterial>);
+
+impl FromWorld for VoxleMaterialHandle {
+    fn from_world(world: &mut World) -> Self {
+        let asset_server = world.resource::<AssetServer>();
+        let material = VoxelMaterial {
+            atlas_shape: UVec4::new(16, 16, 0, 0),
+            base_color_texture: Some(asset_server.load("solid_color.png")),
+            ..Default::default()
+        };
+        let handle = asset_server.add(material);
+        VoxleMaterialHandle(handle)
+    }
+}
+
+impl VoxleMaterialHandle {
+    pub fn get(&self) -> Handle<VoxelMaterial> {
+        self.0.clone()
+    }
+}
+
 fn spawn_test(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     generator: Res<PhoxelGenerator<BlockType, ChunkId>>,
+    matterial_handle: Res<VoxleMaterialHandle>,
 ) {
-    let matterial = VoxelMaterial {
-        atlas_shape: UVec4::new(16, 16, 0, 0),
-        base_color_texture: Some(asset_server.load("solid_color.png")),
-        ..Default::default()
-    };
-    let matterial_handle = asset_server.add(matterial);
     let mut chunk_count = 0;
     let mut total_voxels = 0;
 
@@ -52,10 +68,10 @@ fn spawn_test(
                         total_voxels += CHUNK_VOL;
                         root.spawn((
                             ChunkId::new(x as i32, y, z as i32),
-                            Chunk::<CellData>::empty(),
+                            // Chunk::<CellData>::empty(),
                             // Mesh3d(Default::default()),
                             generator.clone(),
-                            MeshMaterial3d(matterial_handle.clone()),
+                            MeshMaterial3d(matterial_handle.get()),
                         ));
                     }
                 }

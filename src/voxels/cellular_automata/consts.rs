@@ -19,7 +19,7 @@ pub const fn get_e_at_k(block: BlockType, k: FixedNum) -> (FixedNum, CellFlags) 
 use fixed::traits::Fixed;
 use strum::IntoEnumIterator;
 
-use crate::voxels::blocks::BlockType;
+use crate::voxels::block::BlockType;
 use crate::voxels::cellular_automata::cells::CellFlags;
 
 use super::CellData;

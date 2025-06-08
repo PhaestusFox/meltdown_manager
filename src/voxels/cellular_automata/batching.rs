@@ -13,13 +13,13 @@ use crate::{
     utils::{BlockIter, CoreIter, EdgeIter},
     voxels::{
         ChunkId, Neighbours,
-        blocks::BlockType,
+        block::BlockType,
         cellular_automata::*,
         map::{CHUNK_SIZE, ChunkData},
     },
 };
 
-#[derive(States, Clone, Copy, Debug, Hash, Eq, Default)]
+#[derive(States, Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
 pub enum BatchingStep {
     #[default]
     SetupWorld,
@@ -28,12 +28,6 @@ pub enum BatchingStep {
     Ready,
     Run,
     Done,
-}
-
-impl PartialEq for BatchingStep {
-    fn eq(&self, other: &Self) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
 }
 
 #[derive(Resource)]
@@ -132,7 +126,7 @@ impl BatchingStrategy {
 impl FromWorld for BatchingStrategy {
     fn from_world(world: &mut World) -> Self {
         world.init_resource::<NextBatch>();
-        world.init_resource::<Step>();
+        world.init_resource::<VoxelStep>();
         BatchingStrategy {
             batch_size: 0,
             groups: Vec::new(),
@@ -142,9 +136,9 @@ impl FromWorld for BatchingStrategy {
 }
 
 #[derive(Resource, Default)]
-pub struct Step(BatchingStep);
+pub struct VoxelStep(BatchingStep);
 
-impl Step {
+impl VoxelStep {
     fn set(&mut self, step: BatchingStep) {
         debug_assert_ne!(self.0, step, "Setting Step to the same value: {:?}", step);
         self.0 = step;
@@ -159,7 +153,6 @@ pub fn plugin(app: &mut App) {
     app.init_resource::<BatchingStrategy>()
         .register_required_components::<Cells, NextStep>() // make sure Cells always has NextStep
         // If we are out of time for a tick, we force finish it in one frame --- makes Step = Done
-        .add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)))
         // If Step = Run, we run a batch of the simulation --- Sets Step = Done if all batches are finished
         // This must be in Update to maximize performance -- Because it will run with most of the rest of the game
         .add_systems(Update, run_batch.run_if(in_step(BatchingStep::Run)))
@@ -213,11 +206,14 @@ pub fn plugin(app: &mut App) {
         FixedPostUpdate,
         inc_target.run_if(not(in_step(BatchingStep::Pause))),
     );
+
+    #[cfg(feature = "sync")]
+    app.add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)));
 }
 
 fn set_prev(
     mut chunks: Query<(Entity, &mut Cells, &mut NextStep)>,
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     mut batch: ResMut<NextBatch>,
     strategy: Res<BatchingStrategy>,
 ) {
@@ -225,15 +221,9 @@ fn set_prev(
         if !next.has_run {
             error!("NextStep for entity {entity:?} has not run, but we are setting it as previous. This is a bug.\n
             it should have run as part of batch: {:?}\n", strategy.find_batch(entity));
-        }
-        assert!(next.has_run);
-        next.has_run = false;
-        if next.chunk.is_solid() != chunk.is_solid() {
-            next.chunk.set_not_solid();
-        }
-        if chunk.is_solid() && chunk.get_cell(0, 0, 0).get_block_type() == BlockType::Air {
             continue;
         }
+        next.has_run = false;
         std::mem::swap(chunk.bypass_change_detection(), &mut next.chunk);
     }
     batch.reset();
@@ -244,7 +234,7 @@ fn update_batching(
     mut strategy: ResMut<BatchingStrategy>,
     query: Query<Entity, With<Cells>>,
     diagnostics: Res<DiagnosticsStore>,
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     chunk_count: Res<crate::diagnostics::ChunkCount>,
 ) {
     println!("calculating batching groups");
@@ -290,11 +280,12 @@ fn update_batching(
     state.set(BatchingStep::Ready);
 }
 
+#[cfg(feature = "sync")]
 fn force_finish(
     strategy: Res<BatchingStrategy>,
     start_state: Query<&Cells>,
     mut new_state: Query<(Entity, &ChunkId, &mut NextStep, &Neighbours)>,
-    mut next_state: ResMut<Step>,
+    mut next_state: ResMut<VoxelStep>,
     mut next_batch: ResMut<NextBatch>,
     tick: Res<VoxelTick>,
 ) {
@@ -305,11 +296,6 @@ fn force_finish(
                 let Ok(center_pre) = start_state.get(center) else {
                     return;
                 };
-                let block_o = center_pre.get_cell(0, 0, 0);
-                if block_o.get_block_type() == BlockType::Air && center_pre.is_solid() {
-                    chunk.has_run = true;
-                    return; // skip chunks filled with air
-                }
                 let mut chunks = [Some(center_pre), None, None, None, None, None, None];
                 for (i, n) in neighbours.iter() {
                     if let Ok(neighbour) = start_state.get(n) {
@@ -343,7 +329,7 @@ fn force_finish(
 
 fn run_batch(
     strategy: Res<BatchingStrategy>,
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     max: NonSend<crate::diagnostics::MaxValue>,
     start_state: Query<&Cells>,
     mut new_state: Query<(Entity, &ChunkId, &mut NextStep, &Neighbours), With<Cells>>,
@@ -360,6 +346,7 @@ fn run_batch(
     trace!("Running batch {current} of {}", strategy.len());
     let Some(batch) = strategy.get_batch(current) else {
         state.set(BatchingStep::CalculateBatchs);
+        error!("failed to get batch {current} from strategy, resetting batching");
         return;
     };
     new_state.par_iter_many_unique_mut(batch).for_each_init(
@@ -369,15 +356,6 @@ fn run_batch(
                 warn!("Failed to get chunk {id:?} for batching, skipping");
                 return;
             };
-            let block_o = center_pre.get_cell(0, 0, 0);
-            if block_o.get_block_type() == BlockType::Air && center_pre.is_solid() {
-                #[cfg(debug_assertions)]
-                if id.y != 1 {
-                    info!("Skipping chunk {:?} filled with air", id);
-                }
-                chunk.has_run = true;
-                return; // skip chunks filled with air
-            }
             let mut chunks = [Some(center_pre), None, None, None, None, None, None];
             for (i, n) in neighbours.iter() {
                 if let Ok(neighbour) = start_state.get(n) {
@@ -410,7 +388,7 @@ fn run_batch(
 }
 
 fn start_ticking(
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     generating_chunks: Res<phoxels::ChunkGenerator<BlockType>>,
     chunk_count: Res<ChunkCount>,
     mut chunk_manager: ResMut<crate::voxels::ChunkManager>,
@@ -426,7 +404,7 @@ fn start_ticking(
 }
 
 fn toggle_pause(
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     input: Res<ButtonInput<KeyCode>>,
     mut local: Local<BatchingStep>,
 ) {
@@ -444,11 +422,18 @@ fn toggle_pause(
 
 /// This system is used to determine if we need to recalculate the batching groups.
 fn batching_huristinc(
-    mut state: ResMut<Step>,
+    mut state: ResMut<VoxelStep>,
     time: Res<Time<Real>>,
     mut last: Local<u32>,
     diagnostics: Res<DiagnosticsStore>,
+    added: Query<(), Added<Cells>>,
 ) {
+    if !added.is_empty() {
+        // if we added new chunks, we need to recalculate the batching groups
+        state.set(BatchingStep::CalculateBatchs);
+        return;
+    }
+
     if *last != time.elapsed_secs() as u32 {
         *last = time.elapsed_secs() as u32;
         let Some(fps) = diagnostics
@@ -464,7 +449,7 @@ fn batching_huristinc(
 }
 
 fn start_tick(
-    mut step: ResMut<Step>,
+    mut step: ResMut<VoxelStep>,
     time: Res<Time<Real>>,
     mut local: Local<(u8, u32)>,
     mut tick: ResMut<VoxelTick>,
@@ -496,19 +481,19 @@ fn start_tick(
     step.set(BatchingStep::Run);
 }
 
-fn in_step(step: BatchingStep) -> impl Fn(Res<Step>) -> bool {
-    move |s: Res<Step>| s.0 == step
+fn in_step(step: BatchingStep) -> impl Fn(Res<VoxelStep>) -> bool {
+    move |s: Res<VoxelStep>| s.0 == step
 }
 
-pub fn can_modify_next_step(s: Res<Step>) -> bool {
+pub fn can_modify_next_step(s: Res<VoxelStep>) -> bool {
     s.0 == BatchingStep::Done
 }
 
-pub fn can_modify_world(s: Res<Step>) -> bool {
+pub fn can_modify_world(s: Res<VoxelStep>) -> bool {
     s.0 == BatchingStep::Ready
 }
 
-pub fn can_fuck_with_next_step(s: Res<Step>) -> bool {
+pub fn can_fuck_with_next_step(s: Res<VoxelStep>) -> bool {
     s.0 == BatchingStep::Pause
 }
 

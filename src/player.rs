@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 
-use crate::voxels::blocks::BlockType;
+use crate::voxels::block::BlockType;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(

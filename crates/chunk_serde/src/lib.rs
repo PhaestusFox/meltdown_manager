@@ -10,6 +10,31 @@ pub struct BinSerializer {
     data: Vec<u8>,
 }
 
+pub struct BinDeSerializer<'a> {
+    index: usize,
+    data: &'a [u8],
+}
+
+impl BinDeSerializer<'_> {
+    pub fn new(data: &[u8]) -> BinDeSerializer {
+        BinDeSerializer { index: 0, data }
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    pub fn extract<T: Serialize>(&mut self) -> Result<T> {
+        let (v, used) = T::extract(&self.data[self.index..])?;
+        self.index += used;
+        Ok(v)
+    }
+}
+
 impl std::ops::Index<usize> for BinSerializer {
     type Output = u8;
     fn index(&self, index: usize) -> &Self::Output {
@@ -486,4 +511,142 @@ impl<T: Eq + Serialize> Serialize for CompressedChunkData<T> {
         }
         Err(StrError::EOF.into())
     }
+}
+
+impl Serialize for i32 {
+    fn insert(&self, serializer: &mut BinSerializer) -> Result<usize> {
+        let bytes = self.to_be_bytes();
+        serializer.push(bytes[0]);
+        serializer.push(bytes[1]);
+        serializer.push(bytes[2]);
+        serializer.push(bytes[3]);
+        Ok(4)
+    }
+
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        if slice.len() < 4 {
+            Err(BinError::EOF)?
+        }
+        let bytes = [slice[0], slice[1], slice[2], slice[3]];
+        Ok((i32::from_be_bytes(bytes), 4))
+    }
+}
+
+#[test]
+fn test_i32_serialize() {
+    let mut serializer = BinSerializer::new();
+    let value: i32 = 12345678;
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 4);
+    let (extracted_value, used) = i32::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 4);
+
+    let mut serializer = BinSerializer::new();
+
+    let value: i32 = -1;
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 4);
+    let (extracted_value, used) = i32::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 4);
+
+    serializer.insert(&12345678).unwrap();
+
+    let mut de = BinDeSerializer::new(serializer.as_ref());
+    let extracted_value = de.extract::<i32>().unwrap();
+    assert_eq!(extracted_value, -1);
+
+    let extracted_value = de.extract::<i32>().unwrap();
+    assert_eq!(extracted_value, 12345678);
+}
+
+impl Serialize for u64 {
+    fn insert(&self, serializer: &mut BinSerializer) -> Result<usize> {
+        let bytes = self.to_be_bytes();
+        for byte in bytes.iter() {
+            serializer.push(*byte);
+        }
+        Ok(8)
+    }
+
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        if slice.len() < 8 {
+            Err(BinError::EOF)?
+        }
+        let mut bytes = [0; 8];
+        bytes.copy_from_slice(&slice[..8]);
+        Ok((u64::from_be_bytes(bytes), 8))
+    }
+}
+
+#[test]
+fn test_u64_serialize() {
+    let mut serializer = BinSerializer::new();
+    let value: u64 = 1234567890123456789;
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 8);
+    let (extracted_value, used) = u64::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 8);
+
+    let mut serializer = BinSerializer::new();
+
+    let value: u64 = 0xFFFFFFFFFFFFFFFF;
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 8);
+    let (extracted_value, used) = u64::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 8);
+
+    serializer.insert(&1234567890123456789u64).unwrap();
+
+    let mut de = BinDeSerializer::new(serializer.as_ref());
+    let extracted_value = de.extract::<u64>().unwrap();
+    assert_eq!(extracted_value, 0xFFFFFFFFFFFFFFFF);
+    let extracted_value = de.extract::<u64>().unwrap();
+    assert_eq!(extracted_value, 1234567890123456789);
+}
+
+impl<const N: usize> Serialize for [u8; N] {
+    fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
+        vec.data.extend_from_slice(self);
+        Ok(N)
+    }
+
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        if slice.len() < N {
+            Err(BinError::EOF)?
+        }
+        let mut out = [0; N];
+        out.copy_from_slice(&slice[..N]);
+        Ok((out, N))
+    }
+}
+
+#[test]
+fn test_array_serialize() {
+    let mut serializer = BinSerializer::new();
+    let value: [u8; 4] = [1, 2, 3, 4];
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 4);
+    let (extracted_value, used) = <[u8; 4]>::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 4);
+
+    let mut serializer = BinSerializer::new();
+
+    let value: [u8; 8] = [5, 6, 7, 8, 9, 10, 11, 12];
+    let size = value.insert(&mut serializer).unwrap();
+    assert_eq!(size, 8);
+    let (extracted_value, used) = <[u8; 8]>::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_value, value);
+    assert_eq!(used, 8);
+
+    serializer.insert(&[1, 2, 3, 4]).unwrap();
+    let mut de = BinDeSerializer::new(serializer.as_ref());
+    let extracted_value = de.extract::<[u8; 4]>().unwrap();
+    assert_eq!(extracted_value, [5, 6, 7, 8]);
+    let extracted_value = de.extract::<[u8; 8]>().unwrap();
+    assert_eq!(extracted_value, [9, 10, 11, 12, 1, 2, 3, 4]); // Padding for the array size
 }

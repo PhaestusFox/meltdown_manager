@@ -1,6 +1,6 @@
 use std::num::NonZeroU8;
 
-use crate::voxels::blocks::BlockType;
+use crate::voxels::block::BlockType;
 use bevy::{
     asset::{load_internal_asset, weak_handle},
     prelude::*,

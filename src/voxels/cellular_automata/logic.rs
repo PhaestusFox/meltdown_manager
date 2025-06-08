@@ -2,21 +2,19 @@ const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 const SUM_DIVISOR: FixedNum = FixedNum::lit("6.0");
 
 use crate::voxels::{
-    blocks::BlockType,
+    block::BlockType,
     cellular_automata::{FixedNum, cells::CellFlags},
-    map::ChunkData,
-    voxel_chunk::*,
 };
 
 use super::*;
 
-pub fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) {
+pub fn step<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: u64) {
     step_diag(chunk, neighbours, tick);
 }
 
 use fastrand::Rng;
 
-pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usize) -> CellData {
+pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: u64) -> CellData {
     let mut max = CellData::MIN;
     let mut rng = Rng::new();
     for (id, data) in chunk {
@@ -164,7 +162,7 @@ fn do_brownian(
 
 bitflags::bitflags! {
     #[derive(Default, Clone, Copy, Debug)]
-    pub struct StepMode: usize {
+    pub struct StepMode: u64 {
         const PHASE_CHANGE = 1;
         const GRAVITY = 1<<1;
         const BROWNIAN = 1<<2;

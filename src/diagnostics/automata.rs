@@ -18,7 +18,7 @@ use crate::{
     diagnostics::{DiagnosticSettings, TabButton},
     voxels::{
         ChunkId, NeighbourDirection,
-        blocks::BlockType,
+        block::BlockType,
         cellular_automata::{CellData, CellFlags, Cells},
     },
 };

@@ -5,7 +5,7 @@ use bevy::scene::ron::de;
 use bevy_console::{AddConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
-use crate::voxels::blocks::BlockType;
+use crate::voxels::block::BlockType;
 use crate::voxels::map::ChunkData;
 
 pub mod voxels;
@@ -41,6 +41,8 @@ pub fn run_game() {
     });
 
     let mut app = App::new();
+
+    app.insert_resource(bevy_pkv::PkvStore::new("Phox", "meltdown_manager"));
 
     app.insert_resource(Time::<Fixed>::from_duration(
         std::time::Duration::from_millis(TARGET_TICKTIME as u64),

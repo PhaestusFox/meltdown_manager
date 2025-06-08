@@ -22,11 +22,13 @@ bevy_console = "0.14.0"
 clap = "4.5.39"
 indexmap = "2.9.0"
 fastrand = "2.3.0"
+bevy_pkv = "0.13"
 
 [features]
 default = []
 # default = ["file_watcher"]
 file_watcher = ["bevy/file_watcher"]
+sync = []
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }

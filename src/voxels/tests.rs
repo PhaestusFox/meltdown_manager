@@ -6,7 +6,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     utils::BlockIter,
-    voxels::{CHUNK_VOL, blocks::BlockType, voxel_chunk::chunk::Chunk},
+    voxels::{CHUNK_VOL, block::BlockType, voxel_chunk::chunk::Chunk},
 };
 use chunk_serde::{BinSerializer, CompressedChunkData};
 

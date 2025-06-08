@@ -432,3 +432,40 @@ impl ChunkId {
         ))
     }
 }
+
+impl chunk_serde::Serialize for ChunkId {
+    fn insert(&self, serializer: &mut chunk_serde::BinSerializer) -> Result<usize> {
+        serializer.insert(&self.0.x)?;
+        serializer.insert(&self.0.y)?;
+        serializer.insert(&self.0.z)?;
+        Ok(12)
+    }
+    fn extract(slice: &[u8]) -> Result<(Self, usize)> {
+        if slice.len() < 12 {
+            return Err(chunk_serde::StrError::EOF.into());
+        }
+        let x = i32::from_be_bytes(slice[0..4].try_into().unwrap());
+        let y = i32::from_be_bytes(slice[4..8].try_into().unwrap());
+        let z = i32::from_be_bytes(slice[8..12].try_into().unwrap());
+        Ok((ChunkId(IVec3::new(x, y, z)), 12))
+    }
+}
+
+#[test]
+fn serde_id() {
+    use chunk_serde::Serialize;
+    let id = ChunkId::new(1, 2, 3);
+    let mut serializer = chunk_serde::BinSerializer::new();
+    let len = id.insert(&mut serializer).unwrap();
+    assert_eq!(len, 12);
+    let (extracted_id, extracted_len) = ChunkId::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_len, 12);
+    assert_eq!(id, extracted_id);
+
+    let id = ChunkId::new(-1, -2, -3);
+    let mut serializer = chunk_serde::BinSerializer::new();
+    let len = id.insert(&mut serializer).unwrap();
+    assert_eq!(len, 12);
+    let (extracted_id, extracted_len) = ChunkId::extract(serializer.as_ref()).unwrap();
+    assert_eq!(extracted_len, 12);
+}

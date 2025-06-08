@@ -9,7 +9,9 @@ pub fn plugin(app: &mut App) {
         commands::chunk_highlight_command,
     )
     .add_console_command::<commands::NeighborsCommand, _>(commands::chunk_neighbore_command)
-    .add_console_command::<commands::RedrawCommand, _>(commands::chunk_redraw_command);
+    .add_console_command::<commands::RedrawCommand, _>(commands::chunk_redraw_command)
+    .add_console_command::<commands::SaveCommand, _>(commands::chunk_save_command)
+    .add_console_command::<commands::LoadCommand, _>(commands::chunk_load_command);
 
     commands::init(app);
 }

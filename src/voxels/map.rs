@@ -1,11 +1,4 @@
-use bevy::{
-    app::{App, FixedFirst, FixedPostUpdate, FixedPreUpdate, PostUpdate, Startup, Update},
-    asset::AssetApp,
-    ecs::schedule::IntoScheduleConfigs,
-    log::{info, warn},
-    math::UVec3,
-    render::mesh::Mesh3d,
-};
+use bevy::prelude::*;
 use noise::{MultiFractal, NoiseFn};
 use phoxels::{PhoxelsPlugin, core::PhoxelGenerator};
 use strum::EnumCount;
@@ -13,7 +6,7 @@ use strum::EnumCount;
 use crate::{
     utils::BlockIter,
     voxels::{
-        BlockType,
+        BlockType, VoxleMaterialHandle,
         cellular_automata::{self, Cells},
         spawn_test,
         voxel_chunk::{ChunkId, chunk::ChunkManager, prefab::ChunkPrefabLoader},
@@ -77,7 +70,7 @@ pub fn map_plugin(app: &mut App) {
     }));
 
     app.add_plugins(cellular_automata::plugin);
-
+    app.init_resource::<super::VoxleMaterialHandle>();
     app.world_mut()
         .register_component_hooks::<ChunkData>()
         .on_add(|mut world, ctx| {
@@ -87,13 +80,19 @@ pub fn map_plugin(app: &mut App) {
                 .iter()
                 .cloned()
                 .collect::<Vec<_>>();
-            let mut chunk = world
-                .get_mut::<Cells>(ctx.entity)
-                .expect("Cells is required Component");
+            let Some(mut chunk) = world.get_mut::<Cells>(ctx.entity) else {
+                let mut chunk = Cells::empty();
+                for (i, block) in blocks.into_iter().enumerate() {
+                    chunk.get_by_index_mut(i).set_block_type(block);
+                }
+                world.commands().entity(ctx.entity).insert(chunk);
+                return;
+            };
             for (i, block) in blocks.into_iter().enumerate() {
                 chunk.get_by_index_mut(i).set_block_type(block);
             }
         });
+    app.add_systems(Update, add_mesh_data_to_loaded_chunks);
     app.add_systems(
         PostUpdate,
         super::remove_evaluation.run_if(crate::voxels::cellular_automata::can_modify_next_step),
@@ -127,5 +126,24 @@ impl MapNoise {
     fn get_ground(&self, x: i32, z: i32) -> i32 {
         let h = self.sample(x, 0, z) * self.ground as f64;
         h as i32
+    }
+}
+
+fn add_mesh_data_to_loaded_chunks(
+    chunks: Query<(Entity, &Cells), Without<ChunkData>>,
+    material: Res<VoxleMaterialHandle>,
+    mut meshes: ResMut<phoxels::ChunkMesher>,
+    mut commands: Commands,
+) {
+    for (entity, chunk) in &chunks {
+        let mut data = ChunkData::new(UVec3::splat(CHUNK_SIZE as u32));
+        for (x, y, z) in BlockIter::new() {
+            let block = chunk.get_cell(x, y, z).get_block_type();
+            data.set_block(x as u32, y as u32, z as u32, block);
+        }
+        commands
+            .entity(entity)
+            .insert((data, MeshMaterial3d(material.get())));
+        meshes.add_to_queue(entity);
     }
 }

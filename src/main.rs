@@ -1,4 +1,4 @@
-use meltdown_manager::{run_game, voxels::blocks::BlockType};
+use meltdown_manager::{run_game, voxels::block::BlockType};
 use strum::IntoEnumIterator;
 
 #[test]
