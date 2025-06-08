@@ -57,9 +57,9 @@ pub fn map_plugin(app: &mut App) {
                     let b = if start_y + y >= h {
                         BlockType::Air
                     } else {
-                        // let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 3.) % num_blocks)
-                        //     as u8;
-                        BlockType::from_repr(1).unwrap_or_default()
+                        let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 3.) % num_blocks)
+                            as u8;
+                        BlockType::from_repr(r).unwrap_or_default()
                     };
                     debug_assert!(b != BlockType::Void);
                     chunk.set_block(x as u32, y as u32, z as u32, b);
