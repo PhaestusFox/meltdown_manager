@@ -58,17 +58,15 @@ impl ChunkManager {
         self.map.values().cloned()
     }
 
-    pub fn get_block(&self, x: i32, y: i32, z: i32) -> (Entity, CellId) {
+    pub fn get_block(&self, x: i32, y: i32, z: i32) -> Option<(Entity, CellId)> {
         let chunk_id = ChunkId::from_translation(Vec3::new(x as f32, y as f32, z as f32));
-        let entity = self
-            .get_chunk(&chunk_id)
-            .expect("Failed to find chunk for block");
+        let entity = self.get_chunk(&chunk_id)?;
         let cell_id = CellId::new(
             x - chunk_id.x * CHUNK_SIZE,
             y - chunk_id.y * CHUNK_SIZE,
             z - chunk_id.z * CHUNK_SIZE,
         );
-        (entity, cell_id)
+        Some((entity, cell_id))
     }
 }
 
