@@ -6,19 +6,25 @@ use strum::IntoEnumIterator;
 
 use crate::{
     utils::BlockIter,
-    voxels::{CHUNK_VOL, blocks::Blocks, voxel_chunk::chunk::Chunk},
+    voxels::{CHUNK_VOL, blocks::BlockType, voxel_chunk::chunk::Chunk},
 };
 use chunk_serde::{BinSerializer, CompressedChunkData};
 
 #[test]
 fn chunk_compression() {
     let empty = Chunk::empty();
-    let solid = Chunk::solid(Blocks::Copper);
+    let solid = Chunk::solid(BlockType::Copper);
 
     // check empty is solid air
-    assert_eq!(CompressedChunkData::Solid(Blocks::Void), empty.compress());
+    assert_eq!(
+        CompressedChunkData::Solid(BlockType::Void),
+        empty.compress()
+    );
     // check solid is solid block
-    assert_eq!(CompressedChunkData::Solid(Blocks::Copper), solid.compress());
+    assert_eq!(
+        CompressedChunkData::Solid(BlockType::Copper),
+        solid.compress()
+    );
 
     let empty_cop = empty.compress();
     let solid_cop = solid.compress();
@@ -30,13 +36,13 @@ fn chunk_compression() {
     // steal empty because why not
     let mut chunk = empty;
     // set 0,0,0 to something else
-    chunk.set_block(0, 0, 0, Blocks::Copper);
+    chunk.set_cell(0, 0, 0, BlockType::Copper);
 
     // check RLE is chosen since 2 runs = 6 bytes < 27000 bytes of raw
     assert_eq!(
         CompressedChunkData::RunLen(vec![
-            (Blocks::Copper, 1),
-            (Blocks::Void, (CHUNK_VOL - 1) as u16)
+            (BlockType::Copper, 1),
+            (BlockType::Void, (CHUNK_VOL - 1) as u16)
         ]),
         chunk.compress()
     );
@@ -44,11 +50,11 @@ fn chunk_compression() {
     let comp = chunk.compress();
     assert_eq!(Chunk::decompress(&comp), chunk);
 
-    let mut raw = vec![Blocks::Void; CHUNK_VOL];
+    let mut raw = vec![BlockType::Void; CHUNK_VOL];
     // set every other block copper
     for (x, y, z) in BlockIter::new().step_by(2) {
-        raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
-        chunk.set_block(x, y, z, Blocks::Copper);
+        raw[Chunk::<BlockType>::index(x, y, z)] = BlockType::Copper;
+        chunk.set_cell(x, y, z, BlockType::Copper);
     }
 
     // check that is worse case for RLE is uses raw, 27000 runs = 81000 bytes > 27000 bytes of raw
@@ -64,7 +70,7 @@ fn chunk_compression() {
     // todo add transiton test for RLE
     let mut r = 1;
     for (x, y, z) in BlockIter::new().step_by(2) {
-        chunk.set_block(x, y, z, Blocks::Iron);
+        chunk.set_cell(x, y, z, BlockType::Iron);
         r += 2;
         if r >= 9000 {
             break;
@@ -75,7 +81,7 @@ fn chunk_compression() {
         panic!("Should be RLE");
     }
 
-    chunk.set_block(20, 20, 20, Blocks::Uranium);
+    chunk.set_cell(20, 20, 20, BlockType::Uranium);
 
     if let CompressedChunkData::RunLen(_) = chunk.compress() {
         panic!("Should be Raw");
@@ -103,17 +109,17 @@ fn chunk_serde() {
     }
 
     test!(Chunk::empty());
-    for block in Blocks::iter() {
+    for block in BlockType::iter() {
         test!(Chunk::solid(block));
     }
-    chunk.set_block(0, 0, 0, Blocks::Copper);
+    chunk.set_cell(0, 0, 0, BlockType::Copper);
     test!(chunk);
 
-    let mut raw = vec![Blocks::Void; CHUNK_VOL];
+    let mut raw = vec![BlockType::Void; CHUNK_VOL];
     // set every other block copper
     for (x, y, z) in BlockIter::new().step_by(2) {
-        raw[Chunk::<Blocks>::index(x, y, z)] = Blocks::Copper;
-        chunk.set_block(x, y, z, Blocks::Copper);
+        raw[Chunk::<BlockType>::index(x, y, z)] = BlockType::Copper;
+        chunk.set_cell(x, y, z, BlockType::Copper);
     }
 
     test!(chunk);
@@ -127,7 +133,7 @@ fn chunk_serde() {
 
     let mut r = 1;
     for (x, y, z) in BlockIter::new().step_by(2) {
-        chunk.set_block(x, y, z, Blocks::Iron);
+        chunk.set_cell(x, y, z, BlockType::Iron);
         r += 2;
         if r >= 9000 {
             break;
@@ -138,7 +144,7 @@ fn chunk_serde() {
     let w_rle = len;
     assert!(data[0] == 1);
 
-    chunk.set_block(20, 20, 20, Blocks::Uranium);
+    chunk.set_cell(20, 20, 20, BlockType::Uranium);
 
     test!(chunk);
     assert!(w_rle <= raw_len);
@@ -148,9 +154,9 @@ fn chunk_serde() {
 fn fuzz_compression() {
     let mut chunk = Chunk::empty();
     let mut rng = rand::thread_rng();
-    let block: Vec<_> = Blocks::iter().collect();
+    let block: Vec<_> = BlockType::iter().collect();
     for _ in 0..27000 {
-        chunk.set_block(
+        chunk.set_cell(
             rng.random_range(0..30),
             rng.random_range(0..30),
             rng.random_range(0..30),
@@ -165,7 +171,7 @@ fn fuzz_compression() {
 fn fuzz_serde() {
     let mut chunk = Chunk::empty();
     let mut rng = rand::thread_rng();
-    let block: Vec<_> = Blocks::iter().collect();
+    let block: Vec<_> = BlockType::iter().collect();
 
     use chunk_serde::Serialize;
     let mut data = BinSerializer::new();
@@ -184,7 +190,7 @@ fn fuzz_serde() {
         };
     }
     for _ in 0..27000 {
-        chunk.set_block(
+        chunk.set_cell(
             rng.random_range(0..30),
             rng.random_range(0..30),
             rng.random_range(0..30),

@@ -1,10 +1,10 @@
 pub type FixedNum = fixed::types::I25F7;
 
-pub const AIR_AT_20C: (FixedNum, CellFlags) = get_e_at_k(Blocks::Air, FixedNum::lit("293.15"));
+pub const AIR_AT_20C: (FixedNum, CellFlags) = get_e_at_k(BlockType::Air, FixedNum::lit("293.15"));
 pub const ATM_1: FixedNum = FixedNum::lit("101.325");
 pub const STD_CHARGE: FixedNum = FixedNum::lit("0");
 
-pub const fn get_e_at_k(block: Blocks, k: FixedNum) -> (FixedNum, CellFlags) {
+pub const fn get_e_at_k(block: BlockType, k: FixedNum) -> (FixedNum, CellFlags) {
     let props = block.properties();
     let f = if k.to_bits() > props.boiling_point.to_bits() {
         CellFlags::IS_GAS
@@ -19,7 +19,7 @@ pub const fn get_e_at_k(block: Blocks, k: FixedNum) -> (FixedNum, CellFlags) {
 use fixed::traits::Fixed;
 use strum::IntoEnumIterator;
 
-use crate::voxels::blocks::Blocks;
+use crate::voxels::blocks::BlockType;
 use crate::voxels::cellular_automata::cells::CellFlags;
 
 use super::CellData;
@@ -128,7 +128,7 @@ use super::CellData;
 
 #[test]
 fn blocks_can_evaperation_energy() {
-    for block in Blocks::iter() {
+    for block in BlockType::iter() {
         println!("Block: {:?}", block);
         let props = block.properties();
         let fusion_energy = props.fusion_energy;

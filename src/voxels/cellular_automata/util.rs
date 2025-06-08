@@ -6,7 +6,7 @@ use bevy::{
 
 #[cfg(debug_assertions)]
 use crate::voxels::ChunkId;
-use crate::voxels::{blocks::Blocks, cellular_automata::CellData, map::ChunkData};
+use crate::voxels::{blocks::BlockType, cellular_automata::CellData, map::ChunkData};
 const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 pub type Cells = crate::voxels::Chunk<CellData>;
 
@@ -343,7 +343,7 @@ impl<'a> MutChunkGared<'a> {
     {
         let a_index = self.get(a);
         let b_index = self.get(b);
-        if a_index.get_block() == Blocks::Void || b_index.get_block() == Blocks::Void {
+        if a_index.get_block_type() == BlockType::Void || b_index.get_block_type() == BlockType::Void {
             return;
         }
         self.set(a, b_index);

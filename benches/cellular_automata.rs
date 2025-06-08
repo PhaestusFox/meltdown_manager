@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use meltdown_manager::voxels::{ChunkId, blocks::Blocks, cellular_automata::*};
+use meltdown_manager::voxels::{ChunkId, blocks::BlockType, cellular_automata::*};
 use rand::{Rng, SeedableRng, seq::IndexedRandom};
 use std::{hint::black_box, time::Duration};
 use strum::IntoEnumIterator;
@@ -11,7 +11,7 @@ fn gen_chunk() -> Cells {
 fn gen_random_chunk() -> Cells {
     let mut chunk = Cells::empty();
     let mut rng = rand::rngs::StdRng::from_seed([0; 32]);
-    let r = Blocks::iter().collect::<Vec<_>>();
+    let r = BlockType::iter().collect::<Vec<_>>();
     let mut block = CellData::default();
     for x in 0..30 {
         for y in 0..30 {
@@ -19,8 +19,8 @@ fn gen_random_chunk() -> Cells {
                 block.energy = FixedNum::from_num(rng.random_range(0..10000000));
                 block.charge = FixedNum::from_num(rand::random::<f64>());
                 block.presure = FixedNum::from_num(rand::random::<f64>());
-                block.set_block(*r.choose(&mut rng).unwrap_or(&Blocks::Air));
-                chunk.set_block(x, y, z, block);
+                block.set_block_type(*r.choose(&mut rng).unwrap_or(&BlockType::Air));
+                chunk.set_cell(x, y, z, block);
             }
         }
     }

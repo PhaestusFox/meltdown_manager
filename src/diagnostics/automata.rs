@@ -18,7 +18,7 @@ use crate::{
     diagnostics::{DiagnosticSettings, TabButton},
     voxels::{
         ChunkId, NeighbourDirection,
-        blocks::Blocks,
+        blocks::BlockType,
         cellular_automata::{CellData, CellFlags, Cells},
     },
 };
@@ -899,7 +899,7 @@ fn dummy_diagnostics() -> AutomitaDiagnosticChunk {
         dummmy.energy = FixedNum::from_num(8 * x);
         dummmy.charge = FixedNum::from_num(8 * y);
         dummmy.presure = FixedNum::from_num(8 * z);
-        chunk.set_block(x, y, z, dummmy);
+        chunk.set_cell(x, y, z, dummmy);
     }
     extract_component(&chunk, U8)
 }

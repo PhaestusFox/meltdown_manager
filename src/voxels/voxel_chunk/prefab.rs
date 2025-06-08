@@ -4,7 +4,7 @@ use bevy::{
 };
 use chunk_serde::{BinSerializer, CompressedChunkData};
 
-use crate::voxels::{Blocks, cellular_automata::CellData};
+use crate::voxels::{BlockType, cellular_automata::CellData};
 
 #[derive(Default)]
 pub struct ChunkPrefabLoader;
@@ -35,7 +35,7 @@ impl AssetLoader for ChunkPrefabLoader {
 }
 #[derive(Asset, TypePath)]
 pub struct ChunkPrefab {
-    chunk: CompressedChunkData<Blocks>,
+    chunk: CompressedChunkData<BlockType>,
     automita: CompressedChunkData<CellData>,
 }
 

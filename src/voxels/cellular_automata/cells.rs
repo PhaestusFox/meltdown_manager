@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-use crate::voxels::blocks::Blocks;
+use crate::voxels::blocks::BlockType;
 
 use super::FixedNum;
 use super::*;
@@ -10,7 +10,7 @@ use chunk_serde::BinSerializer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellData {
-    block: Blocks,
+    block: BlockType,
     pub energy: FixedNum,
     pub charge: FixedNum,
     pub presure: FixedNum,
@@ -53,7 +53,7 @@ impl chunk_serde::Serialize for CellData {
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         Ok((
             CellData {
-                block: Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void),
+                block: BlockType::from_repr(slice[0]).unwrap_or(BlockType::Void),
                 energy: FixedNum::from_be_bytes(slice[2..6].try_into().unwrap()),
                 charge: FixedNum::from_be_bytes(slice[6..10].try_into().unwrap()),
                 presure: FixedNum::from_be_bytes(slice[10..14].try_into().unwrap()),
@@ -107,7 +107,7 @@ impl chunk_serde::Serialize for CellData {
 impl Default for CellData {
     fn default() -> Self {
         CellData {
-            block: Blocks::Air,
+            block: BlockType::Air,
             energy: AIR_AT_20C.0,
             presure: ATM_1,
             charge: STD_CHARGE,
@@ -117,7 +117,7 @@ impl Default for CellData {
 }
 
 impl CellData {
-    pub const fn at_k(block: Blocks, k: FixedNum) -> CellData {
+    pub const fn at_k(block: BlockType, k: FixedNum) -> CellData {
         let at = get_e_at_k(block, k);
         CellData {
             block,
@@ -128,14 +128,14 @@ impl CellData {
         }
     }
 
-    pub fn set_block(&mut self, block: Blocks) {
+    pub fn set_block_type(&mut self, block: BlockType) {
         let new = get_e_at_k(block, self.temperature());
         self.energy = new.0;
         self.flags = new.1;
         self.block = block;
     }
 
-    pub fn get_block(&self) -> Blocks {
+    pub fn get_block_type(&self) -> BlockType {
         self.block
     }
 
@@ -292,7 +292,7 @@ impl CellData {
         }
     }
 
-    pub const fn lookup_g(&self, block: Blocks) -> FixedNum {
+    pub const fn lookup_g(&self, block: BlockType) -> FixedNum {
         self.block.meta().conductivity(block as u8)
     }
 
@@ -334,7 +334,7 @@ bitflags::bitflags! {
 impl CellData {
     pub const fn all(val: FixedNum) -> Self {
         CellData {
-            block: Blocks::Void,
+            block: BlockType::Void,
             energy: val,
             charge: val,
             presure: val,
@@ -343,7 +343,7 @@ impl CellData {
     }
 
     pub const THE_VOID: CellData = CellData {
-        block: Blocks::Void,
+        block: BlockType::Void,
         energy: FixedNum::ZERO,
         charge: FixedNum::ZERO,
         presure: FixedNum::ZERO,
@@ -351,7 +351,7 @@ impl CellData {
     };
 
     pub const MIN: CellData = CellData {
-        block: Blocks::Void,
+        block: BlockType::Void,
         energy: FixedNum::MIN,
         charge: FixedNum::MIN,
         presure: FixedNum::MIN,
@@ -359,7 +359,7 @@ impl CellData {
     };
 
     pub const MAX: CellData = CellData {
-        block: Blocks::Void,
+        block: BlockType::Void,
         energy: FixedNum::MAX,
         charge: FixedNum::MAX,
         presure: FixedNum::MAX,
@@ -367,7 +367,7 @@ impl CellData {
     };
 
     pub const ZERO: CellData = CellData {
-        block: Blocks::Void,
+        block: BlockType::Void,
         energy: FixedNum::ZERO,
         charge: FixedNum::ZERO,
         presure: FixedNum::ZERO,

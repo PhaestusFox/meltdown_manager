@@ -5,7 +5,7 @@ use bevy::scene::ron::de;
 use bevy_console::{AddConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
-use crate::voxels::blocks::Blocks;
+use crate::voxels::blocks::BlockType;
 use crate::voxels::map::ChunkData;
 
 pub mod voxels;
@@ -92,7 +92,7 @@ fn catch_failed_meshes(
         for (entity, data) in query.iter() {
             let mut not_air = false;
             for block in data.iter() {
-                if *block != Blocks::Air {
+                if *block != BlockType::Air {
                     not_air = true;
                 }
             }

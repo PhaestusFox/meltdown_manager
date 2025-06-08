@@ -2,7 +2,7 @@ const CHUNK_SIZE: i32 = crate::voxels::map::CHUNK_SIZE;
 const SUM_DIVISOR: FixedNum = FixedNum::lit("6.0");
 
 use crate::voxels::{
-    blocks::Blocks,
+    blocks::BlockType,
     cellular_automata::{FixedNum, cells::CellFlags},
     map::ChunkData,
     voxel_chunk::*,
@@ -28,7 +28,7 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
         #[cfg(debug_assertions)]
         {
             debug_assert!(
-                cell.get_block() != Blocks::Void,
+                cell.get_block_type() != BlockType::Void,
                 "Cell {:?} in {:?} is void",
                 id,
                 neighbours.root()
@@ -41,11 +41,11 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: usi
             let t1 = cell.temperature();
             let t2 = neighbour_data.temperature();
             let delta_t = t2 - t1;
-            let g = cell.lookup_g(neighbour_data.get_block());
+            let g = cell.lookup_g(neighbour_data.get_block_type());
             let heat_transfer = g * delta_t;
             cell.energy += heat_transfer;
         }
-        if cell.get_block() == Blocks::Uranium {
+        if cell.get_block_type() == BlockType::Uranium {
             cell.energy += FixedNum::lit("10."); // hack to add uranium heat without changing my meta code
         }
 

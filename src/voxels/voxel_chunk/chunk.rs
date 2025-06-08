@@ -2,8 +2,8 @@ use bevy::{diagnostic::DiagnosticsStore, math::IVec3, platform::collections::Has
 use chunk_serde::CompressedChunkData;
 
 use crate::voxels::{
-    blocks::Blocks,
-    cellular_automata::{CellData, CellId, NextStep},
+    blocks::BlockType,
+    cellular_automata::{CellData, CellId, Cells, NextStep},
     map::{CHUNK_AREA, CHUNK_SIZE, CHUNK_VOL, ChunkData},
     voxel_chunk::ChunkId,
 };
@@ -34,14 +34,14 @@ impl ChunkManager {
     fn save_chunk(
         &self,
         chunk: ChunkId,
-        data: &Query<(&ChunkData, &Chunk<CellData>)>,
+        data: &Query<&Cells>,
         path: &'static str,
     ) -> Result<(), ChunkManagerError> {
         let entity = self
             .get_chunk(&chunk)
             .ok_or(ChunkManagerError::NoEntity(chunk))?;
         let (blocks, automata) = data.get(entity)?;
-        let blocks = Chunk::<Blocks>::from(blocks);
+        let blocks = Chunk::<BlockType>::from(blocks);
         let blocks = blocks.compress();
         let automata = automata.compress();
         todo!();
@@ -58,7 +58,7 @@ impl ChunkManager {
         self.map.values().cloned()
     }
 
-    pub fn get_block(&self, x: i32, y: i32, z: i32) -> Option<(Entity, CellId)> {
+    pub fn get_chunk_and_local_block(&self, x: i32, y: i32, z: i32) -> Option<(Entity, CellId)> {
         let chunk_id = ChunkId::from_translation(Vec3::new(x as f32, y as f32, z as f32));
         let entity = self.get_chunk(&chunk_id)?;
         let cell_id = CellId::new(
@@ -156,7 +156,7 @@ impl<T> Chunk<T> {
 
 impl<T: Copy + Default> Chunk<T> {
     #[inline(always)]
-    pub fn get_block(&self, x: i32, y: i32, z: i32) -> T {
+    pub fn get_cell(&self, x: i32, y: i32, z: i32) -> T {
         if Self::in_bounds(x, y, z) {
             self.blocks[Self::index(x, y, z)]
         } else {
@@ -184,7 +184,7 @@ impl<T: Copy + Default> Chunk<T> {
 
 impl<T: Clone + PartialEq> Chunk<T> {
     #[inline(always)]
-    pub fn set_block(&mut self, x: i32, y: i32, z: i32, to: T) {
+    pub fn set_cell(&mut self, x: i32, y: i32, z: i32, to: T) {
         if self.is_single_block && self.blocks[0] != to {
             self.is_single_block = false;
         }
@@ -360,11 +360,11 @@ impl<'a, T: Copy> Iterator for ChunkBlockIter<'a, T> {
     }
 }
 
-impl From<&ChunkData> for Chunk<Blocks> {
+impl From<&ChunkData> for Chunk<BlockType> {
     fn from(data: &ChunkData) -> Self {
         let mut blocks = Vec::with_capacity(CHUNK_VOL);
         let mut same = true;
-        let first = data.get_block(0, 0, 0).unwrap_or(Blocks::Void);
+        let first = data.get_block(0, 0, 0).unwrap_or(BlockType::Void);
         for (x, y, z) in crate::utils::BlockIter::new() {
             let Some(block) = data.get_block(x as u32, y as u32, z as u32) else {
                 panic!("Invalid Block at ({}, {}, {}); {:?}", x, y, z, data);

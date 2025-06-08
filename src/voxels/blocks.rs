@@ -15,7 +15,7 @@ use phoxels::core::BlockId;
     strum_macros::AsRefStr,
 )]
 #[repr(u8)]
-pub enum Blocks {
+pub enum BlockType {
     #[default]
     Air = 0,
     Copper,
@@ -27,13 +27,13 @@ pub enum Blocks {
     Void,
 }
 
-impl std::fmt::Display for Blocks {
+impl std::fmt::Display for BlockType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{:?}", self))
     }
 }
 
-impl Blocks {
+impl BlockType {
     pub const fn properties(&self) -> &'static block_meta::properties::BlockProperties {
         block_meta::block_properties(*self as u8)
     }
@@ -43,27 +43,27 @@ impl Blocks {
     }
 }
 
-impl chunk_serde::Serialize for Blocks {
+impl chunk_serde::Serialize for BlockType {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
         vec.push(*self as u8);
         Ok(1)
     }
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
         #[cfg(debug_assertions)]
-        return Ok((Blocks::from_repr(slice[0]).unwrap(), 1));
+        return Ok((BlockType::from_repr(slice[0]).unwrap(), 1));
         #[cfg(not(debug_assertions))]
-        return Ok((Blocks::from_repr(slice[0]).unwrap_or(Blocks::Void), 1));
+        return Ok((BlockType::from_repr(slice[0]).unwrap_or(BlockType::Void), 1));
     }
 }
 
-impl phoxels::prelude::Block for Blocks {
+impl phoxels::prelude::Block for BlockType {
     fn id(&self) -> u8 {
         *self as u8
     }
     fn is_solid(&self) -> bool {
-        !matches!(self, Blocks::Void | Blocks::Air)
+        !matches!(self, BlockType::Void | BlockType::Air)
     }
     fn is_transparent(&self) -> bool {
-        matches!(self, Blocks::Air | Blocks::Void)
+        matches!(self, BlockType::Air | BlockType::Void)
     }
 }

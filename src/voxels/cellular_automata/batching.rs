@@ -13,7 +13,7 @@ use crate::{
     utils::{BlockIter, CoreIter, EdgeIter},
     voxels::{
         ChunkId, Neighbours,
-        blocks::Blocks,
+        blocks::BlockType,
         cellular_automata::*,
         map::{CHUNK_SIZE, ChunkData},
     },
@@ -231,7 +231,7 @@ fn set_prev(
         if next.chunk.is_solid() != chunk.is_solid() {
             next.chunk.set_not_solid();
         }
-        if chunk.is_solid() && chunk.get_block(0, 0, 0).get_block() == Blocks::Air {
+        if chunk.is_solid() && chunk.get_cell(0, 0, 0).get_block_type() == BlockType::Air {
             continue;
         }
         std::mem::swap(chunk.bypass_change_detection(), &mut next.chunk);
@@ -305,8 +305,8 @@ fn force_finish(
                 let Ok(center_pre) = start_state.get(center) else {
                     return;
                 };
-                let block_o = center_pre.get_block(0, 0, 0);
-                if block_o.get_block() == Blocks::Air && center_pre.is_solid() {
+                let block_o = center_pre.get_cell(0, 0, 0);
+                if block_o.get_block_type() == BlockType::Air && center_pre.is_solid() {
                     chunk.has_run = true;
                     return; // skip chunks filled with air
                 }
@@ -369,8 +369,8 @@ fn run_batch(
                 warn!("Failed to get chunk {id:?} for batching, skipping");
                 return;
             };
-            let block_o = center_pre.get_block(0, 0, 0);
-            if block_o.get_block() == Blocks::Air && center_pre.is_solid() {
+            let block_o = center_pre.get_cell(0, 0, 0);
+            if block_o.get_block_type() == BlockType::Air && center_pre.is_solid() {
                 #[cfg(debug_assertions)]
                 if id.y != 1 {
                     info!("Skipping chunk {:?} filled with air", id);
@@ -411,7 +411,7 @@ fn run_batch(
 
 fn start_ticking(
     mut state: ResMut<Step>,
-    generating_chunks: Res<phoxels::ChunkGenerator<Blocks>>,
+    generating_chunks: Res<phoxels::ChunkGenerator<BlockType>>,
     chunk_count: Res<ChunkCount>,
     mut chunk_manager: ResMut<crate::voxels::ChunkManager>,
 ) {
@@ -761,7 +761,7 @@ fn update_meshs(
     mut mesher: ResMut<phoxels::ChunkMesher>,
 ) {
     for (entity, cells, mut data) in &mut query {
-        if cells.is_solid() && cells.get_block(0, 0, 0).get_block() == Blocks::Air {
+        if cells.is_solid() && cells.get_cell(0, 0, 0).get_block_type() == BlockType::Air {
             continue; // skip chunks filled with air
         }
         for (i, block) in cells.blocks().enumerate() {
@@ -769,7 +769,7 @@ fn update_meshs(
                 i as u32 % CHUNK_SIZE as u32,
                 i as u32 / (CHUNK_SIZE * CHUNK_SIZE) as u32,
                 (i as u32 / CHUNK_SIZE as u32) % CHUNK_SIZE as u32,
-                block.get_block(),
+                block.get_block_type(),
             );
         }
         mesher.add_to_queue(entity);

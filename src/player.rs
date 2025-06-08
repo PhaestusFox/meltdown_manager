@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 
-use crate::voxels::blocks::Blocks;
+use crate::voxels::blocks::BlockType;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(
@@ -28,7 +28,7 @@ pub struct Player {
 
 #[derive(Component)]
 pub struct Inventory {
-    pub storage: [Blocks; 50],
+    pub storage: [BlockType; 50],
 }
 
 fn player_look(

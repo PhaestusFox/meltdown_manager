@@ -4,7 +4,7 @@ pub mod map;
 mod voxel_chunk;
 
 use bevy::prelude::*;
-use blocks::Blocks;
+use blocks::BlockType;
 use cellular_automata::CellData;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
 pub use voxel_chunk::*;
@@ -25,7 +25,7 @@ const MAP_SIZE: UVec3 = UVec3::new(7, 2, 7);
 fn spawn_test(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    generator: Res<PhoxelGenerator<Blocks, ChunkId>>,
+    generator: Res<PhoxelGenerator<BlockType, ChunkId>>,
 ) {
     let matterial = VoxelMaterial {
         atlas_shape: UVec4::new(16, 16, 0, 0),
@@ -76,11 +76,11 @@ fn remove_evaluation(mut chunks: Query<&mut Cells>) {
     for mut chunk in &mut chunks {
         for (x, y, z) in crate::utils::BlockIter::new() {
             let mut cell = chunk.get_by_index_mut(Cells::index(x, y, z));
-            if cell.get_block() == Blocks::Void || cell.get_block() == Blocks::Air {
+            if cell.get_block_type() == BlockType::Void || cell.get_block_type() == BlockType::Air {
                 continue;
             }
             if cell.is_gas() {
-                cell.set_block(Blocks::Air);
+                cell.set_block_type(BlockType::Air);
                 cell.energy = FixedNum::ZERO;
                 removed += 1;
             };

@@ -5,7 +5,7 @@ use crate::voxels::cellular_automata::CellData;
 #[test]
 fn water_is_liquid_at_20c() {
     let cell = CellData::at_k(
-        crate::voxels::blocks::Blocks::Water,
+        crate::voxels::blocks::BlockType::Water,
         FixedNum::lit("293.15"),
     );
     assert!(
@@ -22,9 +22,9 @@ fn water_is_liquid_at_20c() {
 #[test]
 fn water_is_more_dense_than_air() {
     let water = CellData::at_k(
-        crate::voxels::blocks::Blocks::Water,
+        crate::voxels::blocks::BlockType::Water,
         FixedNum::lit("293.15"),
     );
-    let air = CellData::at_k(crate::voxels::blocks::Blocks::Air, FixedNum::lit("293.15"));
+    let air = CellData::at_k(crate::voxels::blocks::BlockType::Air, FixedNum::lit("293.15"));
     assert!(water.properties().density > air.properties().density);
 }

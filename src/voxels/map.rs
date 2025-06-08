@@ -13,14 +13,14 @@ use strum::EnumCount;
 use crate::{
     utils::BlockIter,
     voxels::{
-        Blocks,
+        BlockType,
         cellular_automata::{self, Cells},
         spawn_test,
         voxel_chunk::{ChunkId, chunk::ChunkManager, prefab::ChunkPrefabLoader},
     },
 };
 
-pub type ChunkData = phoxels::prelude::ChunkData<Blocks>;
+pub type ChunkData = phoxels::prelude::ChunkData<BlockType>;
 
 pub const CHUNK_SIZE: i32 = 30;
 pub const CHUNK_AREA: i32 = CHUNK_SIZE * CHUNK_SIZE;
@@ -31,7 +31,7 @@ pub fn map_plugin(app: &mut App) {
     app.init_asset_loader::<ChunkPrefabLoader>()
         .init_resource::<ChunkManager>()
         .add_systems(Startup, spawn_test)
-        .add_plugins(PhoxelsPlugin::<Blocks, ChunkId>::default());
+        .add_plugins(PhoxelsPlugin::<BlockType, ChunkId>::default());
 
     app.insert_resource(PhoxelGenerator::new(move |id: ChunkId| {
         let noise = noise.clone();
@@ -42,7 +42,7 @@ pub fn map_plugin(app: &mut App) {
                 let gz = id.z * CHUNK_SIZE + z;
                 let h = noise.get_ground(gx, gz);
                 let start_y = id.y * CHUNK_SIZE;
-                let num_blocks = Blocks::COUNT as f64 - 1.;
+                let num_blocks = BlockType::COUNT as f64 - 1.;
                 // if start_y > h {
                 //     for y in 0..CHUNK_SIZE {
                 //         chunk.set_block(x as u32, y as u32, z as u32, Blocks::Air);
@@ -62,13 +62,13 @@ pub fn map_plugin(app: &mut App) {
                 // }
                 for y in 0..CHUNK_SIZE {
                     let b = if start_y + y >= h {
-                        Blocks::Air
+                        BlockType::Air
                     } else {
                         let r = ((noise.sample(gx, y + start_y, gz) * num_blocks * 10.)
                             % num_blocks) as u8;
-                        Blocks::from_repr(r).unwrap_or_default()
+                        BlockType::from_repr(r).unwrap_or_default()
                     };
-                    debug_assert!(b != Blocks::Void);
+                    debug_assert!(b != BlockType::Void);
                     chunk.set_block(x as u32, y as u32, z as u32, b);
                 }
             }
@@ -91,7 +91,7 @@ pub fn map_plugin(app: &mut App) {
                 .get_mut::<Cells>(ctx.entity)
                 .expect("Cells is required Component");
             for (i, block) in blocks.into_iter().enumerate() {
-                chunk.get_by_index_mut(i).set_block(block);
+                chunk.get_by_index_mut(i).set_block_type(block);
             }
         });
     app.add_systems(

@@ -65,7 +65,7 @@ pub fn apply_redraw(
             return;
         };
         for (x, y, z) in BlockIter::new() {
-            let block = cells.get_block(x, y, z).get_block();
+            let block = cells.get_cell(x, y, z).get_block_type();
             chunk_data.set_block(x as u32, y as u32, z as u32, block);
         }
         mesher.add_to_queue(target);
