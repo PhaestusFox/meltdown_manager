@@ -23,7 +23,9 @@ pub enum BlockType {
     Steel,
     Uranium,
     Water,
-
+    Thorium,
+    Wax,
+    Rubber,
     Void,
 }
 

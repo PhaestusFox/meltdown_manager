@@ -28,7 +28,7 @@ const COLOR_MULTIPLIER: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.);
 @group(2) @binding(2) var material_color_sampler: sampler;
 @group(2) @binding(3) var<uniform> face_overrides: array<FaceOverride, 256 / 4>;
 // @group(2) @binding(4) var<uniform> data: array<u32>;
-@group(2) @binding(4) var<storage, read> data: array<FaceOverride, 6750>;
+@group(2) @binding(4) var<storage, read> data: array<FaceOverride, 3375>;
 @group(2) @binding(5) var<uniform> flags: u32;
 
 struct FaceOverride {
@@ -145,7 +145,7 @@ fn fragment(
     let iz = u32(fz);
     let aindex = in.chunk_pos.x + in.chunk_pos.z * 30 + in.chunk_pos.y * 30 * 30;
     // let aindex = ix + iz * 30 + iy * 30 * 30;
-    let ai = aindex % 4;
+    let ai = i32(aindex % 8);
 
     // if ix == 0 {
     //     let ii = iz + iy * 30;
@@ -157,25 +157,22 @@ fn fragment(
     // } else {
     //     discard;
     // }
-    let autos = data[aindex / 4];
+    let autos = data[aindex / 8];
     var adata: u32;
     
-    if ai == 0 {
-        adata = autos.block_a;
-    } else if ai == 1 {
-        adata = autos.block_b;
-    } else if ai == 2 {
-        adata = autos.block_c;
-    } else if ai == 3 {
-        adata = autos.block_d;
-    } else {
-        adata = 0;
-    }    
+    switch ai {
+        case 1: {adata = autos.block_a >> 16;}
+        case 2: {adata = autos.block_b;}
+        case 3: {adata = autos.block_b >> 16;}
+        case 4: {adata = autos.block_c;}
+        case 5: {adata = autos.block_c >> 16;}
+        case 6: {adata = autos.block_d;}
+        case 7: {adata = autos.block_d >> 16;}
+        default: {adata = autos.block_a;}
+    }
 
     let temp = f32(adata & 0xFF) * r255;
-    let presh = f32((adata >> 8) & 0xFF) * r255;
-    let charge = f32( (adata >> 16) & 0xFF) * r255;
-    let phase = (adata >> 24) & 0xFF;
+    let phase = (adata >> 8) & 0xFF;
 
     uvx += axis * texture_step.x;
     var ts = textureSample(material_color_texture, material_color_sampler, vec2(uvx, uvy));
@@ -193,15 +190,9 @@ fn fragment(
             ts.r = 1.;
         }
     } else {
-        if (flags & 1) > 0{
-            ts.r = temp;
-        }
-        if (flags & 2)> 0{
-            ts.g = presh;
-        }
-        if (flags & 4) > 0{
-            ts.b = charge;
-        }
+        ts.r = f32(in.chunk_pos.x) * r30;
+        ts.b = f32(in.chunk_pos.z) * r30;
+        ts.g = f32(in.chunk_pos.y) * r30;
     }
 
     // ts = vec4<f32>(0.0);

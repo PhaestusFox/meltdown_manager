@@ -41,18 +41,25 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: u64
             let delta_t = t2 - t1;
             let g = cell.lookup_g(neighbour_data.get_block_type());
             let heat_transfer = g * delta_t;
-            cell.energy += heat_transfer;
+            cell.energy = cell.energy.saturating_add(heat_transfer);
+            cell.set_tempreture();
         }
-        if cell.get_block_type() == BlockType::Uranium {
-            cell.energy += FixedNum::lit("10."); // hack to add uranium heat without changing my meta code
+        let b = cell.get_block_type();
+        if b == BlockType::Uranium {
+            cell.energy = cell.energy.saturating_add(FixedNum::lit("3000.")); // hack to add uranium heat without changing my meta code
+        } else if b == BlockType::Thorium {
+            cell.energy = cell.energy.saturating_add(FixedNum::lit("1500.")); // hack to add thorium heat without changing my meta code
         }
-
         cell.flags.remove(CellFlags::MOVE_ALL);
         match tick & 0b11 {
             0b00 => {
                 cell.set_phase();
             }
             0b01 => {
+                if cell.temperature() < FixedNum::lit("0.0") {
+                    println!("how? {:?} {:?} {}", id, cell.temperature(), cell.energy);
+                }
+                cell.set_density();
                 cell.flags |= check_gravity(id, &cell, &neighbours);
             }
             0b10 => {
@@ -71,8 +78,11 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: u64
                         0b110 => {
                             cell.flags |= do_brownian(id, id.z & 1 == 0, false, &cell, &neighbours);
                         }
+                        0b001 => {
+                            cell.flags |= do_brownian_gas(id, id.y & 1 == 1, &cell, &neighbours);
+                        }
                         _ => {
-                            rng.seed(tick as u64 ^ id.y as u64);
+                            rng.seed(tick ^ id.y as u64);
                             let odd = rng.i32(0..=1);
                             if rng.bool() {
                                 cell.flags |=
@@ -86,6 +96,10 @@ pub fn step_diag<'a>(chunk: ChunkIter<'a>, neighbours: ChunkGared<'a>, tick: u64
                 }
             }
             0b11 => {
+                if cell.temperature() < FixedNum::lit("0.0") {
+                    println!("how? {:?} {:?} {}", id, cell.temperature(), cell.energy);
+                }
+                cell.set_density();
                 cell.flags |= check_gravity(id, &cell, &neighbours);
             }
             _ => unreachable!(),
@@ -102,34 +116,52 @@ fn check_gravity(id: CellId, cell: &CellData, neighbours: &ChunkGared) -> CellFl
         // check if the cell can move
         return CellFlags::empty();
     }
-    if cell.is_liquid() {
-        // liquids fall down
-        let Some(other) = neighbours.get(id.down()) else {
-            return CellFlags::empty();
-        };
-        if !other.can_move() {
-            return CellFlags::empty();
+    let up = neighbours.get(id.up());
+    let down = neighbours.get(id.down());
+    match (cell.is_gas(), up, down) {
+        (true, Some(up), _) => {
+            if up.density() > cell.density() {
+                return CellFlags::MOVE_UP;
+            }
         }
-        if other.is_gas() || other.properties().density < cell.properties().density {
-            CellFlags::MOVE_DOWN
-        } else {
-            // liquids cannot move down if the target is a liquid with higher density
-            CellFlags::empty()
+        (true, None, Some(down)) => {
+            if down.density() < cell.density() {
+                return CellFlags::MOVE_DOWN;
+            }
         }
+        (false, _, Some(down)) => {
+            if down.density() < cell.density() {
+                return CellFlags::MOVE_DOWN;
+            }
+        }
+        (false, Some(up), None) => {
+            if up.density() > cell.density() {
+                return CellFlags::MOVE_UP;
+            }
+        }
+        (_, None, None) => {
+            // no neighbours, no gravity
+        }
+    }
+    CellFlags::empty()
+}
+
+fn do_brownian_gas(id: CellId, odd: bool, cell: &CellData, neighbours: &ChunkGared) -> CellFlags {
+    let (target, will_move) = match odd {
+        true => (id.up(), CellFlags::MOVE_UP),
+        false => (id.down(), CellFlags::MOVE_DOWN),
+    };
+    let Some(other) = neighbours.get(target) else {
+        return CellFlags::empty();
+    };
+    if !other.can_move() {
+        return CellFlags::empty();
+    }
+    if cell.is_gas() && other.is_gas() {
+        will_move
     } else {
-        // gases rise up
-        let Some(other) = neighbours.get(id.up()) else {
-            return CellFlags::empty();
-        };
-        if !other.can_move() {
-            return CellFlags::empty();
-        }
-        if other.is_liquid() || other.properties().density > cell.properties().density {
-            CellFlags::MOVE_UP
-        } else {
-            // gases cannot move up if the target is a gas with lower density
-            CellFlags::empty()
-        }
+        // gases cannot move into liquids and vice versa
+        CellFlags::empty()
     }
 }
 

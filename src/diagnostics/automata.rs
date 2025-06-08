@@ -1,3 +1,5 @@
+use std::u16;
+
 use bevy::{
     diagnostic::{
         Diagnostic, DiagnosticMeasurement, DiagnosticPath, Diagnostics, DiagnosticsStore,
@@ -17,7 +19,7 @@ use super::MaxValue;
 use crate::{
     diagnostics::{DiagnosticSettings, TabButton},
     voxels::{
-        ChunkId, NeighbourDirection,
+        ChunkId, NeighbourDirection, VoxleMaterialHandle,
         block::BlockType,
         cellular_automata::{CellData, CellFlags, Cells},
     },
@@ -87,10 +89,7 @@ fn on_open(In(content): In<Entity>, mut commands: Commands, state: Res<TabState>
     let buttons = [
         CellMode::OFF,
         CellMode::TEMPERATURE,
-        CellMode::PRESURE,
-        CellMode::CHARGE,
         CellMode::DUMMY,
-        CellMode::PAUSE,
         CellMode::PHASE,
     ];
     let buttons = buttons
@@ -109,7 +108,7 @@ fn on_open(In(content): In<Entity>, mut commands: Commands, state: Res<TabState>
                 })
             };
             (
-                button_bundle(mode.is_empty()),
+                button_bundle(state.mode.intersects(mode)),
                 TabButton::new(on_click),
                 Text::new(string),
                 mode,
@@ -552,7 +551,7 @@ fn update_tab(
 
 #[derive(Component, Clone, ShaderType, Debug)]
 pub struct AutomitaDiagnosticChunk {
-    blocks: [Data; CHUNK_VOL / 4],
+    blocks: [Data; CHUNK_VOL / 8],
 }
 
 #[derive(Clone, ShaderType, Debug)]
@@ -748,7 +747,6 @@ fn update_diagnostics(
     mut materials: ResMut<Assets<DebugMaterial>>,
     mut storage_buffers: ResMut<Assets<ShaderStorageBuffer>>,
     state: Res<TabState>,
-    max: NonSend<MaxValue>,
     mut to_update: ResMut<ToUpdate>,
 ) {
     let Some(to_update) = to_update.get_frame() else {
@@ -774,10 +772,7 @@ fn update_diagnostics(
             }
             continue;
         }
-        buffer.set_data(extract_component(
-            data,
-            max.get_max().max(FixedNum::lit("1000.")),
-        ));
+        buffer.set_data(extract_component(data, FixedNum::lit("1000.")));
     }
 }
 
@@ -819,56 +814,64 @@ fn add_diagnostics(
 const ONE_HUNDRED: FixedNum = FixedNum::lit("100.0");
 const ONE: FixedNum = FixedNum::ONE;
 const U8: FixedNum = FixedNum::lit("255.0");
+const U16: FixedNum = FixedNum::lit("65535.0");
 
 fn extract_component(item: &Cells, max: FixedNum) -> AutomitaDiagnosticChunk {
     let mut chunk = AutomitaDiagnosticChunk {
-        blocks: [Data::ZERO; CHUNK_VOL / 4],
-        // blocks: 0.,
+        blocks: [Data::ZERO; CHUNK_VOL / 8],
     };
-    for i in (0..CHUNK_VOL).step_by(4) {
+    for i in (0..CHUNK_VOL).step_by(8) {
         let item0 = item.get_by_index(i);
         let item1 = item.get_by_index(i + 1);
         let item2 = item.get_by_index(i + 2);
         let item3 = item.get_by_index(i + 3);
+        let item4 = item.get_by_index(i + 4);
+        let item5 = item.get_by_index(i + 5);
+        let item6 = item.get_by_index(i + 6);
+        let item7 = item.get_by_index(i + 7);
 
-        let mut tt0 = item0.temperature() / FixedNum::from_num(2);
-        let mut tt1 = item1.temperature() / FixedNum::from_num(2);
-        let mut tt2 = item2.temperature() / FixedNum::from_num(2);
-        let mut tt3 = item3.temperature() / FixedNum::from_num(2);
-        let mut normalized_0 = item0.normalize(max);
-        let mut normalized_1 = item1.normalize(max);
-        let mut normalized_2 = item2.normalize(max);
-        let mut normalized_3 = item3.normalize(max);
-        normalized_0 *= ONE_HUNDRED;
-        normalized_1 *= ONE_HUNDRED;
-        normalized_2 *= ONE_HUNDRED;
-        normalized_3 *= ONE_HUNDRED;
-        normalized_0.clamp(ONE, U8);
+        let mut tt0 = item0.temperature() * FixedNum::lit("0.05");
+        let mut tt1 = item1.temperature() * FixedNum::lit("0.05");
+        let mut tt2 = item2.temperature() * FixedNum::lit("0.05");
+        let mut tt3 = item3.temperature() * FixedNum::lit("0.05");
+        let mut tt4 = item4.temperature() * FixedNum::lit("0.05");
+        let mut tt5 = item5.temperature() * FixedNum::lit("0.05");
+        let mut tt6 = item6.temperature() * FixedNum::lit("0.05");
+        let mut tt7 = item7.temperature() * FixedNum::lit("0.05");
         tt0 = tt0.clamp(FixedNum::ZERO, U8);
-        normalized_1.clamp(ONE, U8);
         tt1 = tt1.clamp(FixedNum::ZERO, U8);
-        normalized_2.clamp(ONE, U8);
         tt2 = tt2.clamp(FixedNum::ZERO, U8);
-        normalized_3.clamp(ONE, U8);
         tt3 = tt3.clamp(FixedNum::ZERO, U8);
+        tt4 = tt4.clamp(FixedNum::ZERO, U8);
+        tt5 = tt5.clamp(FixedNum::ZERO, U8);
+        tt6 = tt6.clamp(FixedNum::ZERO, U8);
+        tt7 = tt7.clamp(FixedNum::ZERO, U8);
 
         let t0: u8 = tt0.to_num();
-        let p0: u8 = normalized_0.presure.to_num();
-        let c0: u8 = normalized_0.charge.to_num();
         let t1: u8 = tt1.to_num();
-        let p1: u8 = normalized_1.presure.to_num();
-        let c1: u8 = normalized_1.charge.to_num();
         let t2: u8 = tt2.to_num();
-        let p2: u8 = normalized_2.presure.to_num();
-        let c2: u8 = normalized_2.charge.to_num();
         let t3: u8 = tt3.to_num();
-        let p3: u8 = normalized_3.presure.to_num();
-        let c3: u8 = normalized_3.charge.to_num();
-        chunk.blocks[i / 4] = Data::new([
-            t0 as u32 | (p0 as u32) << 8 | (c0 as u32) << 16 | (item0.flags.bits() as u32) << 24,
-            t1 as u32 | (p1 as u32) << 8 | (c1 as u32) << 16 | (item1.flags.bits() as u32) << 24,
-            t2 as u32 | (p2 as u32) << 8 | (c2 as u32) << 16 | (item2.flags.bits() as u32) << 24,
-            t3 as u32 | (p3 as u32) << 8 | (c3 as u32) << 16 | (item3.flags.bits() as u32) << 24,
+        let t4: u8 = tt4.to_num();
+        let t5: u8 = tt5.to_num();
+        let t6: u8 = tt6.to_num();
+        let t7: u8 = tt7.to_num();
+        chunk.blocks[i / 8] = Data::new([
+            t0 as u32
+                | (item0.flags.bits() as u32) << 8
+                | (t1 as u32) << 16
+                | (item1.flags.bits() as u32) << 24,
+            t2 as u32
+                | (item2.flags.bits() as u32) << 8
+                | (t3 as u32) << 16
+                | (item3.flags.bits() as u32) << 24,
+            t4 as u32
+                | (item4.flags.bits() as u32) << 8
+                | (t5 as u32) << 16
+                | (item5.flags.bits() as u32) << 24,
+            t6 as u32
+                | (item6.flags.bits() as u32) << 8
+                | (t7 as u32) << 16
+                | (item7.flags.bits() as u32) << 24,
         ]);
     }
     chunk
@@ -876,19 +879,14 @@ fn extract_component(item: &Cells, max: FixedNum) -> AutomitaDiagnosticChunk {
 
 fn remove_diagnostics(
     chunks: Query<Entity, With<MeshMaterial3d<DebugMaterial>>>,
-    mut force_update: Query<
-        &mut MeshMaterial3d<VoxelMaterial>,
-        With<MeshMaterial3d<DebugMaterial>>,
-    >,
     mut commands: Commands,
+    material: Res<VoxleMaterialHandle>,
 ) {
     for entity in &chunks {
         commands
             .entity(entity)
-            .remove::<MeshMaterial3d<DebugMaterial>>();
-    }
-    for mut force in &mut force_update {
-        force.set_changed();
+            .remove::<MeshMaterial3d<DebugMaterial>>()
+            .insert(MeshMaterial3d(material.get()));
     }
 }
 

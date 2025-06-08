@@ -1,6 +1,4 @@
-use std::io::Write;
-
-use bevy::{diagnostic::DiagnosticsStore, math::IVec3, platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 use chunk_serde::CompressedChunkData;
 
 use crate::voxels::{
@@ -26,7 +24,7 @@ impl ChunkManager {
         self.map.insert(id, entity)
     }
     pub fn remove_chunk(&mut self, id: &ChunkId) -> Option<Entity> {
-        self.map.remove(id)
+        self.map.swap_remove(id)
     }
 
     pub fn get_chunk(&self, id: &ChunkId) -> Option<Entity> {

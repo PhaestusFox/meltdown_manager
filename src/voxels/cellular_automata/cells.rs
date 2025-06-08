@@ -12,6 +12,8 @@ use chunk_serde::BinSerializer;
 pub struct CellData {
     block: BlockType,
     pub energy: FixedNum,
+    tempreture: FixedNum,
+    density: FixedNum,
     pub charge: FixedNum,
     pub presure: FixedNum,
     pub flags: CellFlags,
@@ -37,7 +39,6 @@ pub struct CellData {
 impl chunk_serde::Serialize for CellData {
     fn insert(&self, vec: &mut BinSerializer) -> Result<usize> {
         vec.push(self.block as u8);
-        vec.push(self.flags.bits());
         for byte in self.energy.to_be_bytes() {
             vec.push(byte);
         }
@@ -47,20 +48,23 @@ impl chunk_serde::Serialize for CellData {
         for byte in self.presure.to_be_bytes() {
             vec.push(byte);
         }
-        Ok(14)
+        Ok(13)
     }
 
     fn extract(slice: &[u8]) -> Result<(Self, usize)> {
-        Ok((
-            CellData {
-                block: BlockType::from_repr(slice[0]).unwrap_or(BlockType::Void),
-                energy: FixedNum::from_be_bytes(slice[2..6].try_into().unwrap()),
-                charge: FixedNum::from_be_bytes(slice[6..10].try_into().unwrap()),
-                presure: FixedNum::from_be_bytes(slice[10..14].try_into().unwrap()),
-                flags: CellFlags::from_bits_truncate(slice[1]),
-            },
-            14,
-        ))
+        let mut out = CellData {
+            block: BlockType::from_repr(slice[0]).unwrap_or(BlockType::Void),
+            energy: FixedNum::from_be_bytes(slice[1..5].try_into().unwrap()),
+            charge: FixedNum::from_be_bytes(slice[5..9].try_into().unwrap()),
+            presure: FixedNum::from_be_bytes(slice[9..13].try_into().unwrap()),
+            tempreture: FixedNum::ONE, // Will be set later
+            density: FixedNum::ONE,    // Will be set later
+            flags: CellFlags::empty(),
+        };
+        out.set_tempreture();
+        out.set_phase();
+        out.set_density();
+        Ok((out, 13))
     }
 
     // fn insert_str(&self, serializer: &mut chunk_serde::StrSerializer) -> Result<usize> {
@@ -110,7 +114,9 @@ impl Default for CellData {
             block: BlockType::Air,
             energy: AIR_AT_20C.0,
             presure: ATM_1,
+            tempreture: FixedNum::lit("293.15"), // 20C in Kelvin
             charge: STD_CHARGE,
+            density: FixedNum::lit("1.0"), // Default density
             flags: AIR_AT_20C.1,
         }
     }
@@ -119,11 +125,20 @@ impl Default for CellData {
 impl CellData {
     pub const fn at_k(block: BlockType, k: FixedNum) -> CellData {
         let at = get_e_at_k(block, k);
+        let d = if at.1.contains(CellFlags::IS_GAS) {
+            FixedNum::lit("0.33")
+        } else if at.1.contains(CellFlags::IS_LIQUID) {
+            FixedNum::lit("0.90")
+        } else {
+            FixedNum::ONE
+        };
         CellData {
             block,
             energy: at.0,
             charge: FixedNum::ZERO,
             presure: ATM_1,
+            density: block.properties().density.saturating_mul(d),
+            tempreture: k,
             flags: at.1,
         }
     }
@@ -133,6 +148,9 @@ impl CellData {
         self.energy = new.0;
         self.flags = new.1;
         self.block = block;
+        self.set_tempreture();
+        self.set_phase();
+        self.set_density();
     }
 
     pub fn get_block_type(&self) -> BlockType {
@@ -274,9 +292,17 @@ impl<T: fixed::traits::ToFixed> Div<T> for CellData {
 }
 
 impl CellData {
-    pub fn temperature(&self) -> FixedNum {
+    pub const fn temperature(&self) -> FixedNum {
+        self.tempreture
+    }
+
+    pub fn set_tempreture(&mut self) {
         let meta = self.block.meta();
-        self.energy / meta.properties.specific_heat
+        self.tempreture = self.energy / meta.properties.specific_heat;
+        if self.temperature() <= FixedNum::ZERO {
+            self.energy = FixedNum::ONE;
+            self.tempreture = FixedNum::lit("0.15");
+        }
     }
 
     pub fn set_phase(&mut self) {
@@ -338,7 +364,7 @@ impl CellData {
             energy: val,
             charge: val,
             presure: val,
-            flags: CellFlags::all(),
+            ..CellData::THE_VOID
         }
     }
 
@@ -348,6 +374,8 @@ impl CellData {
         charge: FixedNum::ZERO,
         presure: FixedNum::ZERO,
         flags: CellFlags::IS_GAS,
+        density: FixedNum::ONE,
+        tempreture: FixedNum::lit("271.15"),
     };
 
     pub const MIN: CellData = CellData {
@@ -356,6 +384,7 @@ impl CellData {
         charge: FixedNum::MIN,
         presure: FixedNum::MIN,
         flags: CellFlags::empty(),
+        ..CellData::THE_VOID
     };
 
     pub const MAX: CellData = CellData {
@@ -364,6 +393,7 @@ impl CellData {
         charge: FixedNum::MAX,
         presure: FixedNum::MAX,
         flags: CellFlags::IS_GAS,
+        ..CellData::THE_VOID
     };
 
     pub const ZERO: CellData = CellData {
@@ -372,5 +402,30 @@ impl CellData {
         charge: FixedNum::ZERO,
         presure: FixedNum::ZERO,
         flags: CellFlags::empty(),
+        ..CellData::THE_VOID
     };
+}
+
+impl CellData {
+    pub const fn density(&self) -> FixedNum {
+        self.density
+    }
+
+    pub fn set_density(&mut self) {
+        if self.is_gas() {
+            self.density = FixedNum::lit("1.");
+        } else if self.is_liquid() {
+            let factor = self
+                .properties()
+                .melting_point
+                .saturating_div(self.temperature());
+            self.density = self
+                .properties()
+                .density
+                .saturating_mul(FixedNum::lit("0.33"))
+                .saturating_mul(factor);
+        } else {
+            self.density = self.properties().density;
+        }
+    }
 }

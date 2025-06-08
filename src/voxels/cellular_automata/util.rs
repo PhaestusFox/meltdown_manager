@@ -3,6 +3,7 @@ use bevy::{
     math::IVec3,
     prelude::{Component, Deref, DerefMut},
 };
+use block_meta::FixedNum;
 
 #[cfg(debug_assertions)]
 use crate::voxels::ChunkId;
@@ -284,7 +285,11 @@ impl<'a> ChunkGared<'a> {
         let normalized_id = index.normalize_id(id);
         let chunk = self.get_chunk(index)?;
         let index = Cells::index(normalized_id.x, normalized_id.y, normalized_id.z);
-        Some(chunk.get_by_index(index))
+        let cell = chunk.get_by_index(index);
+        if cell.get_block_type() == BlockType::Void {
+            return None;
+        }
+        Some(cell)
     }
 
     fn get_chunk(&self, index: GaredIndex) -> Option<&'a Cells> {

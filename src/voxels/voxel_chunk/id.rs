@@ -468,4 +468,5 @@ fn serde_id() {
     assert_eq!(len, 12);
     let (extracted_id, extracted_len) = ChunkId::extract(serializer.as_ref()).unwrap();
     assert_eq!(extracted_len, 12);
+    assert_eq!(id, extracted_id);
 }
