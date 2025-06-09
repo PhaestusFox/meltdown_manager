@@ -33,7 +33,7 @@ impl Plugin for MeltdownDiagnosticsPlugin {
                 Update,
                 (toggle_window, on_click_tap).run_if(in_state(GameState::Game)),
             )
-            .add_systems(OnEnter(GameState::Menu), on_init)
+            .add_systems(OnEnter(GameState::Game), on_init)
             .add_systems(Update, tab_button_system.run_if(in_state(GameState::Game)))
             // .add_observer(slider_observer)
             // .add_observer(slider_drop)
