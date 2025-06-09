@@ -10,10 +10,10 @@ use chunk_serde::BinSerializer;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellData {
-    block: BlockType,
+    pub block: BlockType,
     pub energy: FixedNum,
-    tempreture: FixedNum,
-    density: FixedNum,
+    pub tempreture: FixedNum,
+    pub density: FixedNum,
     pub flags: CellFlags,
 }
 
