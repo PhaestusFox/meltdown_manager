@@ -8,18 +8,15 @@ use block::BlockType;
 use phoxels::{core::VoxelMaterial, prelude::PhoxelGenerator};
 pub use voxel_chunk::*;
 
-use crate::voxels::{
-    cellular_automata::{CellFlags, Cells, FixedNum, NextStep},
-    map::ChunkData,
+use crate::{
+    menu::MapSize,
+    voxels::{
+        cellular_automata::{CellFlags, Cells, FixedNum, NextStep},
+        map::ChunkData,
+    },
 };
 
 pub use map::{CHUNK_SIZE, CHUNK_VOL};
-
-#[cfg(target_arch = "wasm32")]
-const MAP_SIZE: UVec3 = UVec3::new(15, 3, 15);
-
-#[cfg(not(target_arch = "wasm32"))]
-const MAP_SIZE: UVec3 = UVec3::new(21, 6, 21);
 
 #[derive(Resource)]
 pub struct VoxleMaterialHandle(Handle<VoxelMaterial>);
@@ -48,9 +45,11 @@ fn spawn_test(
     asset_server: Res<AssetServer>,
     generator: Res<PhoxelGenerator<BlockType, ChunkId>>,
     matterial_handle: Res<VoxleMaterialHandle>,
+    map_size: Res<MapSize>,
 ) {
     let mut chunk_count = 0;
     let mut total_voxels = 0;
+    let map_size = map_size.0;
     commands
         .spawn((
             Name::new("Chunks"),
@@ -58,9 +57,9 @@ fn spawn_test(
             Visibility::Visible,
         ))
         .with_children(|root| {
-            let y = MAP_SIZE.y as i32;
-            for x in 0..MAP_SIZE.x {
-                for z in 0..MAP_SIZE.z {
+            let y = map_size.y as i32;
+            for x in 0..map_size.x {
+                for z in 0..map_size.z {
                     for y in -y..1 {
                         chunk_count += 1;
                         total_voxels += CHUNK_VOL;

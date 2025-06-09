@@ -17,16 +17,13 @@ use super::GameState;
 const TEXT_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 
 #[derive(Resource, Debug, Component, PartialEq, Copy, Clone)]
-pub struct MapSize(UVec3);
+pub struct MapSize(pub UVec3);
 
 impl Default for MapSize {
     fn default() -> Self {
         MapSize(UVec3::new(15, 3, 15)) // Default map size
     }
 }
-
-#[derive(Resource, Default)]
-struct MapSizeInputText(String);
 
 #[derive(Component)]
 struct CurrentMapSizeDisplay;
@@ -263,6 +260,11 @@ fn settings_menu_setup(mut commands: Commands, map_size: Res<MapSize>) {
                     CurrentMapSizeDisplay,
                 ),
                 (
+                    Text::new("Use format X,Y,Z with positive integers"),
+                    text_style.clone(),
+                    TextColor(TEXT_COLOR),
+                ),
+                (
                     input_field_node,
                     BackgroundColor(NORMAL_BUTTON),
                     TextInput::default(),
@@ -278,7 +280,7 @@ fn settings_menu_setup(mut commands: Commands, map_size: Res<MapSize>) {
                     BackgroundColor(NORMAL_BUTTON),
                     MenuButtonAction::SetMapSize,
                     children![(
-                        Text::new("Set Map Size"),
+                        Text::new("Set Map"),
                         button_text_style.clone(),
                         TextColor(TEXT_COLOR),
                     ),]
