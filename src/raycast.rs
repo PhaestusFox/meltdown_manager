@@ -10,7 +10,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct RaycastHit {
     pub distance: f32,
-    pub world_position: Vec3,
     pub voxel_position: IVec3,
     pub block_type: BlockType,
 }
@@ -20,7 +19,6 @@ pub fn handle_voxel_interaction(
     chunk_manager: Res<ChunkManager>,
     mut chunks_query: Query<(&ChunkId, &mut Cells)>,
     input: Res<ButtonInput<MouseButton>>,
-    keys: Res<ButtonInput<KeyCode>>,
     current_block: Res<CurrentBlock>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
@@ -34,24 +32,15 @@ pub fn handle_voxel_interaction(
 
     // Left click to remove block
     if input.just_pressed(MouseButton::Left) {
-        if let Some(solid_hit) = raycast_for_solid_block(
-            start_pos,
-            forward,
-            max_distance,
-            &chunk_manager,
-            &chunks_query,
-        ) {
+        if let Some(solid_hit) =
+            raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
+        {
             println!(
                 "Removing block at {:?}: {:?}",
                 solid_hit.voxel_position, solid_hit.block_type
             );
 
-            if set_block_at_position(
-                solid_hit.voxel_position,
-                BlockType::Air,
-                &chunk_manager,
-                &mut chunks_query,
-            ) {
+            if set_block_at_position(solid_hit.voxel_position, BlockType::Air, &mut chunks_query) {
                 println!("Successfully removed block");
             } else {
                 println!("Failed to remove block - chunk not found");
@@ -63,13 +52,9 @@ pub fn handle_voxel_interaction(
 
     // Right click to place block
     if input.just_pressed(MouseButton::Right) {
-        if let Some(solid_hit) = raycast_for_solid_block(
-            start_pos,
-            forward,
-            max_distance,
-            &chunk_manager,
-            &chunks_query,
-        ) {
+        if let Some(solid_hit) =
+            raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
+        {
             if let Some(placement_pos) =
                 find_placement_position(forward, &solid_hit, &chunk_manager, &chunks_query)
             {
@@ -81,12 +66,7 @@ pub fn handle_voxel_interaction(
                     block_type, placement_pos, solid_hit.voxel_position
                 );
 
-                if set_block_at_position(
-                    placement_pos,
-                    block_type,
-                    &chunk_manager,
-                    &mut chunks_query,
-                ) {
+                if set_block_at_position(placement_pos, block_type, &mut chunks_query) {
                     println!("Successfully placed block");
                 } else {
                     println!("Failed to place block - chunk not found");
@@ -108,13 +88,9 @@ pub fn handle_voxel_interaction(
         println!("Start: {:?}", start_pos);
         println!("Direction: {:?}", forward);
 
-        if let Some(solid_hit) = raycast_for_solid_block(
-            start_pos,
-            forward,
-            max_distance,
-            &chunk_manager,
-            &chunks_query,
-        ) {
+        if let Some(solid_hit) =
+            raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
+        {
             println!(
                 "First solid block: {:?} at {:?} (distance: {:.2})",
                 solid_hit.block_type, solid_hit.voxel_position, solid_hit.distance
@@ -137,7 +113,6 @@ pub fn handle_voxel_interaction(
 /// Get block type at a world position - Updated for mutable query
 fn get_block_at_position(
     voxel_pos: IVec3,
-    chunk_manager: &ChunkManager,
     chunks_query: &Query<(&ChunkId, &mut Cells)>,
 ) -> BlockType {
     // Calculate which chunk this voxel belongs to
@@ -170,7 +145,6 @@ fn get_block_at_position(
 fn set_block_at_position(
     voxel_pos: IVec3,
     block_type: BlockType,
-    chunk_manager: &ChunkManager,
     chunks_query: &mut Query<(&ChunkId, &mut Cells)>,
 ) -> bool {
     // Calculate which chunk this voxel belongs to
@@ -204,7 +178,6 @@ pub fn raycast_for_solid_block(
     start_pos: Vec3,
     direction: Vec3,
     max_distance: f32,
-    chunk_manager: &ChunkManager,
     chunks_query: &Query<(&ChunkId, &mut Cells)>,
 ) -> Option<RaycastHit> {
     let direction = direction.normalize();
@@ -220,13 +193,12 @@ pub fn raycast_for_solid_block(
             world_pos.z.floor() as i32,
         );
 
-        let block_type = get_block_at_position(voxel_pos, chunk_manager, chunks_query);
+        let block_type = get_block_at_position(voxel_pos, chunks_query);
 
         // Check if this is a solid block
         if block_type != BlockType::Air && block_type != BlockType::Void {
             return Some(RaycastHit {
                 distance,
-                world_position: world_pos,
                 voxel_position: voxel_pos,
                 block_type,
             });
@@ -255,7 +227,7 @@ pub fn find_placement_position(
         );
 
     // Check if the placement position is empty
-    let block_at_placement = get_block_at_position(placement_pos, chunk_manager, chunks_query);
+    let block_at_placement = get_block_at_position(placement_pos, chunks_query);
     if block_at_placement == BlockType::Air || block_at_placement == BlockType::Void {
         return Some(placement_pos);
     }
@@ -272,7 +244,7 @@ pub fn find_placement_position(
 
     for offset in adjacent_offsets {
         let candidate_pos = solid_hit.voxel_position + offset;
-        let block_at_candidate = get_block_at_position(candidate_pos, chunk_manager, chunks_query);
+        let block_at_candidate = get_block_at_position(candidate_pos, chunks_query);
 
         if block_at_candidate == BlockType::Air || block_at_candidate == BlockType::Void {
             return Some(candidate_pos);

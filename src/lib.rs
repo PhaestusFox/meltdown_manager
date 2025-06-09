@@ -100,7 +100,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Name::new("Player"),
         Camera3d::default(),
-        player::Player { speed: 100. },
+        player::Player { speed: 30. },
         IsDefaultUiCamera,
         Transform::from_matrix(Mat4 {
             x_axis: Vec4::from_array([1.0, 0.0, 0.0, 0.0]),
