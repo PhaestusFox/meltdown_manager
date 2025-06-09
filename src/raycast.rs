@@ -33,6 +33,7 @@ pub fn handle_voxel_interaction(
     input: Res<ButtonInput<MouseButton>>,
     current_block: Res<CurrentBlock>,
     mut debug_ui_visible: ResMut<DebugUIVisible>,
+    mut last_click: Local<Option<MouseButton>>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
         return;
@@ -44,7 +45,8 @@ pub fn handle_voxel_interaction(
     let max_distance = 10.0;
 
     // Left click to remove block
-    if input.just_pressed(MouseButton::Left) {
+    if input.pressed(MouseButton::Left) && *last_click != Some(MouseButton::Left) {
+        *last_click = Some(MouseButton::Left);
         if let Some(solid_hit) =
             raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
         {
@@ -64,7 +66,8 @@ pub fn handle_voxel_interaction(
     }
 
     // Right click to place block
-    if input.just_pressed(MouseButton::Right) {
+    if input.pressed(MouseButton::Right) && *last_click != Some(MouseButton::Right) {
+        *last_click = Some(MouseButton::Right);
         if let Some(solid_hit) =
             raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
         {
@@ -95,9 +98,17 @@ pub fn handle_voxel_interaction(
     }
 
     // Middle click to toggle debug UI
-    if input.just_pressed(MouseButton::Middle) {
+    if input.pressed(MouseButton::Middle) && *last_click != Some(MouseButton::Middle) {
+        *last_click = Some(MouseButton::Middle);
         debug_ui_visible.0 = !debug_ui_visible.0;
         println!("Debug UI toggled: {}", debug_ui_visible.0);
+    }
+
+    if !input.pressed(MouseButton::Left)
+        && !input.pressed(MouseButton::Right)
+        && !input.pressed(MouseButton::Middle)
+    {
+        *last_click = None; // Reset last click if no button is pressed
     }
 }
 
@@ -440,7 +451,12 @@ pub fn voxel_raycast_plugin(app: &mut App) {
         .add_systems(OnEnter(GameState::Game), setup_debug_ui)
         .add_systems(
             Update,
-            (handle_voxel_interaction, update_debug_ui, toggle_crosshair)
+            (
+                handle_voxel_interaction
+                    .in_set(crate::voxels::cellular_automata::ApplyStep::PostApply),
+                update_debug_ui,
+                toggle_crosshair,
+            )
                 .run_if(in_state(GameState::Game)),
         );
 }

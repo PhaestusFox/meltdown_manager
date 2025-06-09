@@ -7,7 +7,8 @@ mod util;
 use crate::voxels::VoidNeighbours;
 pub use crate::voxels::map::ChunkData;
 pub use batching::{
-    BatchingStep, VoxelStep, can_fuck_with_next_step, can_modify_next_step, can_modify_world,
+    ApplyStep, BatchingStep, VoxelStep, can_fuck_with_next_step, can_modify_next_step,
+    can_modify_world,
 };
 use bevy::prelude::*;
 pub use cells::{CellData, CellFlags};
