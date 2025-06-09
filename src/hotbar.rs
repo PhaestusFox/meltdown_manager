@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{GameState, voxels::block::BlockType};
 
 #[derive(Resource, Default)]
-struct CurrentBlock(BlockType);
+pub struct CurrentBlock(pub BlockType);
 
 #[derive(Component)]
 struct BlockSelector;

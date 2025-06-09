@@ -2,11 +2,11 @@ use bevy::prelude::*;
 
 use crate::{
     GameState,
+    hotbar::CurrentBlock,
     player::Player,
     voxels::{CHUNK_SIZE, ChunkId, ChunkManager, block::BlockType, cellular_automata::Cells},
 };
 
-/// Simple raycast hit information
 #[derive(Debug, Clone)]
 pub struct RaycastHit {
     pub distance: f32,
@@ -15,13 +15,13 @@ pub struct RaycastHit {
     pub block_type: BlockType,
 }
 
-/// System to handle voxel interaction - FIXED VERSION
 pub fn handle_voxel_interaction(
     camera_query: Query<&Transform, (With<Camera3d>, With<Player>)>,
     chunk_manager: Res<ChunkManager>,
-    mut chunks_query: Query<(&ChunkId, &mut Cells)>, // Single mutable query
+    mut chunks_query: Query<(&ChunkId, &mut Cells)>,
     input: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    current_block: Res<CurrentBlock>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
         return;
@@ -74,19 +74,7 @@ pub fn handle_voxel_interaction(
                 find_placement_position(forward, &solid_hit, &chunk_manager, &chunks_query)
             {
                 // Choose block type based on key pressed
-                let block_type = if keys.pressed(KeyCode::Digit1) {
-                    BlockType::Copper
-                } else if keys.pressed(KeyCode::Digit2) {
-                    BlockType::Iron
-                } else if keys.pressed(KeyCode::Digit3) {
-                    BlockType::Steel
-                } else if keys.pressed(KeyCode::Digit4) {
-                    BlockType::Uranium
-                } else if keys.pressed(KeyCode::Digit5) {
-                    BlockType::Water
-                } else {
-                    BlockType::Copper // Default
-                };
+                let block_type = current_block.0;
 
                 println!(
                     "Placing {:?} block at {:?} (next to {:?})",
