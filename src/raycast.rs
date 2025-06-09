@@ -180,15 +180,19 @@ fn update_debug_ui(
 pub fn setup_debug_ui(mut commands: Commands) {
     let panel_style = Node {
         position_type: PositionType::Absolute,
-        top: Val::Px(10.0),
-        right: Val::Px(10.0),
-        width: Val::Px(350.0),
+        top: Val::Percent(0.0),
+        right: Val::Percent(0.0),
+        width: Val::Auto, // Dynamic width
+        max_width: Val::Percent(80.0),
         max_height: Val::Percent(80.0),
         flex_direction: FlexDirection::Column,
-        padding: UiRect::all(Val::Px(15.0)),
-        border: UiRect::all(Val::Px(2.0)),
-        display: Display::None, // Hidden by default
-        overflow: Overflow::scroll_y(),
+        flex_wrap: FlexWrap::Wrap, // Allow wrapping to new columns
+        padding: UiRect::all(Val::Percent(0.0)),
+        border: UiRect::all(Val::Percent(0.0)),
+        display: Display::Flex,
+        align_items: AlignItems::FlexStart,
+        justify_content: JustifyContent::FlexStart,
+        column_gap: Val::Percent(1.0),
         ..default()
     };
 

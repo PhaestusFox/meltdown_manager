@@ -34,12 +34,12 @@ pub fn block_selector_plugin(app: &mut App) {
 
 fn setup_block_selector(mut commands: Commands) {
     let button_node = Node {
-        width: Val::Px(80.0),
-        height: Val::Px(80.0),
-        margin: UiRect::all(Val::Px(5.0)),
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        margin: UiRect::all(Val::Percent(1.0)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
-        border: UiRect::all(Val::Px(2.0)),
+        border: UiRect::all(Val::Percent(0.5)),
         ..default()
     };
 
@@ -66,11 +66,11 @@ fn setup_block_selector(mut commands: Commands) {
         children![(
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Percent(10.0),
+                height: Val::Percent(15.0),
                 flex_direction: FlexDirection::Column,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
-                padding: UiRect::all(Val::Px(10.0)),
+                padding: UiRect::all(Val::Percent(1.0)),
                 ..default()
             },
             BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.8)),
@@ -81,7 +81,9 @@ fn setup_block_selector(mut commands: Commands) {
                     TextColor(Color::srgb(0.1, 0.1, 0.1)),
                     CurrentSelectionText,
                     Node {
-                        margin: UiRect::new(Val::Px(0.0), Val::Px(0.0), Val::Px(0.0), Val::Px(5.0)),
+                        height: Val::Percent(100.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
                         ..default()
                     },
                 ),

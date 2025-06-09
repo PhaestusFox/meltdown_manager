@@ -127,8 +127,8 @@ fn menu_setup(mut menu_state: ResMut<NextState<MenuState>>) {
 
 fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let button_node = Node {
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
+        width: Val::Percent(90.0),
+        height: Val::Percent(30.0),
         margin: UiRect::all(Val::Percent(2.0)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
@@ -152,6 +152,8 @@ fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
+                width: Val::Percent(50.0),
+                height: Val::Percent(90.0),
                 ..default()
             },
             BackgroundColor(CRIMSON.into()),
@@ -243,6 +245,8 @@ fn settings_menu_setup(mut commands: Commands, map_size: Res<MapSize>) {
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
+                width: Val::Percent(50.0),
+                height: Val::Percent(50.0),
                 ..default()
             },
             BackgroundColor(CRIMSON.into()),
