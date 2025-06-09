@@ -127,17 +127,11 @@ fn menu_setup(mut menu_state: ResMut<NextState<MenuState>>) {
 
 fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let button_node = Node {
-        width: Val::Px(300.0),
-        height: Val::Px(65.0),
-        margin: UiRect::all(Val::Px(20.0)),
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        margin: UiRect::all(Val::Percent(2.0)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
-        ..default()
-    };
-    let button_icon_node = Node {
-        width: Val::Px(30.0),
-        position_type: PositionType::Absolute,
-        left: Val::Px(10.0),
         ..default()
     };
     let button_text_font = TextFont {
@@ -163,14 +157,14 @@ fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             BackgroundColor(CRIMSON.into()),
             children![
                 (
-                    Text::new("Bevy Game Menu UI"),
+                    Text::new("Meltdown Manager"),
                     TextFont {
                         font_size: 67.0,
                         ..default()
                     },
                     TextColor(TEXT_COLOR),
                     Node {
-                        margin: UiRect::all(Val::Px(50.0)),
+                        margin: UiRect::all(Val::Percent(5.0)),
                         ..default()
                     },
                 ),
@@ -210,18 +204,18 @@ fn main_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn settings_menu_setup(mut commands: Commands, map_size: Res<MapSize>) {
     let button_node = Node {
-        width: Val::Px(200.0),
-        height: Val::Px(65.0),
-        margin: UiRect::all(Val::Px(10.0)),
+        width: Val::Percent(90.0),
+        height: Val::Percent(30.0),
+        margin: UiRect::all(Val::Percent(1.5)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
         ..default()
     };
 
     let input_field_node = Node {
-        width: Val::Px(200.0),
-        height: Val::Px(40.0),
-        margin: UiRect::all(Val::Px(10.0)),
+        width: Val::Percent(90.0),
+        height: Val::Percent(30.0),
+        margin: UiRect::all(Val::Percent(1.5)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
         ..default()

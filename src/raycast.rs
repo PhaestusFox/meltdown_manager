@@ -18,11 +18,21 @@ pub struct RaycastHit {
     pub cell_data: CellData,
 }
 
+#[derive(Resource, Default)]
+pub struct DebugUIVisible(pub bool);
+
+#[derive(Component)]
+struct DebugUIPanel;
+
+#[derive(Component)]
+struct DebugUIContent;
+
 pub fn handle_voxel_interaction(
     camera_query: Query<&Transform, (With<Camera3d>, With<Player>)>,
     mut chunks_query: Query<(&ChunkId, &mut Cells)>,
     input: Res<ButtonInput<MouseButton>>,
     current_block: Res<CurrentBlock>,
+    mut debug_ui_visible: ResMut<DebugUIVisible>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
         return;
@@ -84,53 +94,179 @@ pub fn handle_voxel_interaction(
         }
     }
 
-    // Debug: Show raycast info
+    // Middle click to toggle debug UI
     if input.just_pressed(MouseButton::Middle) {
-        println!("=== Raycast Debug ===");
-        println!("Start: {:?}", start_pos);
-        println!("Direction: {:?}", forward);
-
-        if let Some(solid_hit) =
-            raycast_for_solid_block(start_pos, forward, max_distance, &chunks_query)
-        {
-            println!(
-                "First solid block: {:?} at {:?} (distance: {:.2})",
-                solid_hit.cell_data, solid_hit.voxel_position, solid_hit.distance
-            );
-
-            if let Some(placement_pos) = find_placement_position(forward, &solid_hit, &chunks_query)
-            {
-                println!("Placement position: {:?}", placement_pos);
-            } else {
-                println!("No placement position available");
-            }
-        } else {
-            println!("No solid block found");
-        }
+        debug_ui_visible.0 = !debug_ui_visible.0;
+        println!("Debug UI toggled: {}", debug_ui_visible.0);
     }
 }
 
-// Update the helper functions to work with mutable queries
-/// Get block type at a world position - Updated for mutable query
+// New system to update debug UI content
+fn update_debug_ui(
+    camera_query: Query<&Transform, (With<Camera3d>, With<Player>)>,
+    chunks_query: Query<(&ChunkId, &mut Cells)>,
+    debug_ui_visible: Res<DebugUIVisible>,
+    mut debug_content_query: Query<&mut Text, With<DebugUIContent>>,
+    mut debug_panel_query: Query<&mut Node, With<DebugUIPanel>>,
+) {
+    let Ok(camera_transform) = camera_query.single() else {
+        return;
+    };
+
+    // Show/hide the debug panel
+    if let Ok(mut style) = debug_panel_query.single_mut() {
+        style.display = if debug_ui_visible.0 {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+
+    // Update content only if visible
+    if !debug_ui_visible.0 {
+        return;
+    }
+
+    let Ok(mut text) = debug_content_query.single_mut() else {
+        return;
+    };
+
+    // Get camera position and forward direction
+    let start_pos = camera_transform.translation;
+    let forward = camera_transform.forward().as_vec3();
+    let max_distance = 10.0;
+
+    // Perform detailed raycast
+    let ray_hits = raycast_all_blocks(start_pos, forward, max_distance, &chunks_query);
+
+    // Format the debug information
+    let mut content = String::from("=== RAYCAST DEBUG ===\n");
+    content.push_str(&format!(
+        "Origin: ({:.1}, {:.1}, {:.1})\n",
+        start_pos.x, start_pos.y, start_pos.z
+    ));
+    content.push_str(&format!(
+        "Direction: ({:.2}, {:.2}, {:.2})\n",
+        forward.x, forward.y, forward.z
+    ));
+    content.push_str(&format!("Max Distance: {:.1}\n", max_distance));
+    content.push_str(&format!("Blocks Found: {}\n\n", ray_hits.len()));
+
+    if ray_hits.is_empty() {
+        content.push_str("No blocks encountered in ray path.");
+    } else {
+        for (i, hit) in ray_hits.iter().enumerate() {
+            content.push_str(&format!("--- BLOCK {} ---\n", i + 1));
+            content.push_str(&format!("Type: {:?}\n", hit.cell_data.get_block_type()));
+            content.push_str(&format!(
+                "Position: ({}, {}, {})\n",
+                hit.voxel_position.x, hit.voxel_position.y, hit.voxel_position.z
+            ));
+            content.push_str(&format!("Distance: {:.2}m\n", hit.distance));
+            content.push_str(&format!("Temperature: {:.1}K\n", hit.cell_data.tempreture));
+            content.push_str(&format!("Energy: {:.2}kJ\n", hit.cell_data.energy));
+            content.push_str(&format!("Density: {:.3}kg/m^3\n", hit.cell_data.density));
+
+            if i < ray_hits.len() - 1 {
+                content.push_str("\n");
+            }
+        }
+    }
+
+    text.0 = content;
+}
+
+// New system to setup debug UI
+pub fn setup_debug_ui(mut commands: Commands) {
+    let panel_style = Node {
+        position_type: PositionType::Absolute,
+        top: Val::Px(10.0),
+        right: Val::Px(10.0),
+        width: Val::Px(350.0),
+        max_height: Val::Percent(80.0),
+        flex_direction: FlexDirection::Column,
+        padding: UiRect::all(Val::Px(15.0)),
+        border: UiRect::all(Val::Px(2.0)),
+        display: Display::None, // Hidden by default
+        overflow: Overflow::scroll_y(),
+        ..default()
+    };
+
+    let text_font = TextFont {
+        font_size: 12.0,
+        ..default()
+    };
+
+    commands.spawn((
+        panel_style,
+        BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+        BorderColor(Color::srgb(0.3, 0.3, 0.3)),
+        DebugUIPanel,
+        children![(
+            Text::new("Debug information will appear here..."),
+            text_font,
+            TextColor(Color::srgb(0.9, 0.9, 0.9)),
+            DebugUIContent,
+        )],
+    ));
+}
+
+pub fn raycast_all_blocks(
+    start_pos: Vec3,
+    direction: Vec3,
+    max_distance: f32,
+    chunks_query: &Query<(&ChunkId, &mut Cells)>,
+) -> Vec<RaycastHit> {
+    let direction = direction.normalize();
+    let step_size = 0.1;
+    let max_steps = (max_distance / step_size) as i32;
+    let mut hits = Vec::new();
+    let mut last_voxel_pos = None;
+
+    for step in 0..max_steps {
+        let distance = step as f32 * step_size;
+        let world_pos = start_pos + direction * distance;
+        let voxel_pos = IVec3::new(
+            world_pos.x.floor() as i32,
+            world_pos.y.floor() as i32,
+            world_pos.z.floor() as i32,
+        );
+
+        if Some(voxel_pos) != last_voxel_pos {
+            let cell_data = get_block_at_position(voxel_pos, chunks_query);
+            let block_type = cell_data.get_block_type();
+
+            if block_type != BlockType::Void {
+                hits.push(RaycastHit {
+                    distance,
+                    voxel_position: voxel_pos,
+                    cell_data,
+                });
+            }
+
+            last_voxel_pos = Some(voxel_pos);
+        }
+    }
+
+    hits
+}
+
 fn get_block_at_position(
     voxel_pos: IVec3,
     chunks_query: &Query<(&ChunkId, &mut Cells)>,
 ) -> CellData {
-    // Calculate which chunk this voxel belongs to
     let chunk_id = ChunkId(IVec3::from_array([
         voxel_pos.x.div_euclid(CHUNK_SIZE),
         voxel_pos.y.div_euclid(CHUNK_SIZE),
         voxel_pos.z.div_euclid(CHUNK_SIZE),
     ]));
 
-    // Calculate local position within the chunk
     let local_pos = IVec3::new(
         voxel_pos.x.rem_euclid(CHUNK_SIZE),
         voxel_pos.y.rem_euclid(CHUNK_SIZE),
         voxel_pos.z.rem_euclid(CHUNK_SIZE),
     );
 
-    // Find the chunk entity and get the block
     for (id, cells) in chunks_query.iter() {
         if *id == chunk_id {
             let cell = cells.get_cell(local_pos.x, local_pos.y, local_pos.z);
@@ -144,27 +280,23 @@ fn get_block_at_position(
     }
 }
 
-/// Set block type at a world position - Updated for mutable query
 fn set_block_at_position(
     voxel_pos: IVec3,
     block_type: BlockType,
     chunks_query: &mut Query<(&ChunkId, &mut Cells)>,
 ) -> bool {
-    // Calculate which chunk this voxel belongs to
     let chunk_id = ChunkId(IVec3::from_array([
         voxel_pos.x.div_euclid(CHUNK_SIZE),
         voxel_pos.y.div_euclid(CHUNK_SIZE),
         voxel_pos.z.div_euclid(CHUNK_SIZE),
     ]));
 
-    // Calculate local position within the chunk
     let local_pos = IVec3::new(
         voxel_pos.x.rem_euclid(CHUNK_SIZE),
         voxel_pos.y.rem_euclid(CHUNK_SIZE),
         voxel_pos.z.rem_euclid(CHUNK_SIZE),
     );
 
-    // Find the chunk entity and set the block
     for (id, mut cells) in chunks_query.iter_mut() {
         if *id == chunk_id {
             let CellData {
@@ -193,7 +325,6 @@ fn set_block_at_position(
     false // Chunk not found
 }
 
-/// Updated raycast function to work with mutable query
 pub fn raycast_for_solid_block(
     start_pos: Vec3,
     direction: Vec3,
@@ -201,7 +332,7 @@ pub fn raycast_for_solid_block(
     chunks_query: &Query<(&ChunkId, &mut Cells)>,
 ) -> Option<RaycastHit> {
     let direction = direction.normalize();
-    let step_size = 0.1; // Small steps for accuracy
+    let step_size = 0.1;
     let max_steps = (max_distance / step_size) as i32;
 
     for step in 0..max_steps {
@@ -274,10 +405,11 @@ pub fn find_placement_position(
     None
 }
 
-// Plugin setup
 pub fn voxel_raycast_plugin(app: &mut App) {
-    app.add_systems(
-        Update,
-        handle_voxel_interaction.run_if(in_state(GameState::Game)),
-    );
+    app.insert_resource(DebugUIVisible::default())
+        .add_systems(OnEnter(GameState::Game), setup_debug_ui)
+        .add_systems(
+            Update,
+            (handle_voxel_interaction, update_debug_ui).run_if(in_state(GameState::Game)),
+        );
 }

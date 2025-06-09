@@ -8,6 +8,7 @@ use strum::IntoEnumIterator;
 use crate::hotbar::block_selector_plugin;
 use crate::menu::menu_plugin;
 use crate::raycast::voxel_raycast_plugin;
+use crate::ui::crosshair::CrosshairPlugin;
 use crate::voxels::block::BlockType;
 use crate::voxels::map::ChunkData;
 
@@ -75,8 +76,8 @@ pub fn run_game() {
             // only add editor in debug builds
             // editor is not supported on wasm32
             voxel_raycast_plugin,
-        ))
-        .add_systems(OnEnter(GameState::Game), ui::ui::spawn_crosshair);
+            CrosshairPlugin,
+        ));
     app.add_plugins(block_selector_plugin);
     // #[cfg(debug_assertions)]
     // #[cfg(not(target_arch = "wasm32"))]
