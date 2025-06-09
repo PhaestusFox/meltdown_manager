@@ -7,7 +7,7 @@ use crate::voxels::{ChunkManager, cellular_automata::NextStep, map::CHUNK_SIZE};
 #[derive(Component, Deref, Clone, Copy, PartialEq, Eq, Hash, Debug, Default, Reflect)]
 #[component(immutable, on_insert = ChunkId::on_insert, on_remove = ChunkId::on_remove, on_add = ChunkId::on_add, on_despawn = ChunkId::on_despawn)]
 #[require(Transform, Neighbours)]
-pub struct ChunkId(IVec3);
+pub struct ChunkId(pub IVec3);
 
 impl std::fmt::Display for ChunkId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

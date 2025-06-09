@@ -5,7 +5,9 @@ use bevy::scene::ron::de;
 use bevy_console::{AddConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
+use crate::hotbar::block_selector_plugin;
 use crate::menu::menu_plugin;
+use crate::raycast::voxel_raycast_plugin;
 use crate::voxels::block::BlockType;
 use crate::voxels::map::ChunkData;
 
@@ -15,8 +17,10 @@ pub use utils::BlockIter;
 
 mod console;
 mod diagnostics;
+mod hotbar;
 mod menu;
 mod player;
+mod raycast;
 mod ui;
 
 const TARGET_TICKTIME: f64 = 100.; // 10 ticks per second
@@ -70,9 +74,10 @@ pub fn run_game() {
             diagnostics::MeltdownDiagnosticsPlugin,
             // only add editor in debug builds
             // editor is not supported on wasm32
+            voxel_raycast_plugin,
         ))
         .add_systems(OnEnter(GameState::Game), ui::ui::spawn_crosshair);
-
+    app.add_plugins(block_selector_plugin);
     // #[cfg(debug_assertions)]
     // #[cfg(not(target_arch = "wasm32"))]
     // app.add_plugins(bevy_editor_pls::EditorPlugin::default());

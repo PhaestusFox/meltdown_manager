@@ -1,7 +1,7 @@
 pub mod block;
 pub mod cellular_automata;
 pub mod map;
-mod voxel_chunk;
+pub mod voxel_chunk;
 
 use bevy::prelude::*;
 use block::BlockType;
