@@ -24,6 +24,7 @@ indexmap = "2.9.0"
 fastrand = "2.3.0"
 bevy_pkv = "0.13"
 base64 = "0.22.1"
+bevy_simple_text_input = "0.11.1"
 
 [features]
 default = []

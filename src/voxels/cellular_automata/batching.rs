@@ -8,7 +8,7 @@ use bevy::{
 };
 
 use crate::{
-    TARGET_TICKTIME,
+    GameState, TARGET_TICKTIME,
     diagnostics::ChunkCount,
     utils::{BlockIter, CoreIter, EdgeIter},
     voxels::{
@@ -155,7 +155,12 @@ pub fn plugin(app: &mut App) {
         // If we are out of time for a tick, we force finish it in one frame --- makes Step = Done
         // If Step = Run, we run a batch of the simulation --- Sets Step = Done if all batches are finished
         // This must be in Update to maximize performance -- Because it will run with most of the rest of the game
-        .add_systems(Update, run_batch.run_if(in_step(BatchingStep::Run)))
+        .add_systems(
+            Update,
+            run_batch
+                .run_if(in_step(BatchingStep::Run))
+                .run_if(in_state(GameState::Game)),
+        )
         // If Step = Ready, we check if we need to update the batching groups
         // for now we do this every second
         // Update batching groups sets Step = Ready
@@ -167,17 +172,25 @@ pub fn plugin(app: &mut App) {
                 batching_huristinc.run_if(in_step(BatchingStep::Ready)),
                 update_batching.run_if(in_step(BatchingStep::CalculateBatchs)),
             )
-                .chain(),
+                .chain()
+                .run_if(in_state(GameState::Game)),
         )
         // If Step = Ready by time we get to last, set Step = Run --- this is the start of the tick
         // would be better if could be before update to avoid a wasted frame
         // ^ can't think of a way to do this that wouldn't clober Step before other systems get to do there checks
-        .add_systems(Last, start_tick.run_if(in_step(BatchingStep::Ready)));
+        .add_systems(
+            Last,
+            start_tick
+                .run_if(in_step(BatchingStep::Ready))
+                .run_if(in_state(GameState::Game)),
+        );
 
     // wait for world to finish generating chunks
     app.add_systems(
         Update,
-        start_ticking.run_if(in_step(BatchingStep::SetupWorld)),
+        start_ticking
+            .run_if(in_step(BatchingStep::SetupWorld))
+            .run_if(in_state(GameState::Game)),
     );
     // If tick it finished, we update the state of the world --- makes Step = Ready
     app.configure_sets(
@@ -185,30 +198,45 @@ pub fn plugin(app: &mut App) {
         (ApplyStep::PreApply, ApplyStep::Apply, ApplyStep::PostApply)
             .after(run_batch)
             .chain()
-            .run_if(in_step(BatchingStep::Done)),
+            .run_if(in_step(BatchingStep::Done))
+            .run_if(in_state(GameState::Game)),
     );
 
-    app.add_systems(Update, set_prev.in_set(ApplyStep::Apply));
+    app.add_systems(
+        Update,
+        set_prev
+            .in_set(ApplyStep::Apply)
+            .run_if(in_state(GameState::Game)),
+    );
 
     app.add_systems(
         Update,
         apply_physics
             .in_set(ApplyStep::PostApply)
-            .run_if(logic::is_step(StepMode::from_bits_retain(2))),
+            .run_if(logic::is_step(StepMode::from_bits_retain(2)))
+            .run_if(in_state(GameState::Game)),
     );
 
-    app.add_systems(Update, toggle_pause);
-    app.add_systems(Update, update_meshs.after(ApplyStep::PostApply));
+    app.add_systems(Update, toggle_pause.run_if(in_state(GameState::Game)));
+    app.add_systems(
+        Update,
+        update_meshs
+            .after(ApplyStep::PostApply)
+            .run_if(in_state(GameState::Game)),
+    );
 
     // this is what increments the target tick once per 1/10th of a second
     // should run try run before we start a tick
     app.add_systems(
         FixedPostUpdate,
-        inc_target.run_if(not(in_step(BatchingStep::Pause))),
+        inc_target
+            .run_if(not(in_step(BatchingStep::Pause)))
+            .run_if(in_state(GameState::Game)),
     );
 
     #[cfg(feature = "sync")]
-    app.add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)));
+    app.add_systems(FixedFirst, force_finish.run_if(in_step(BatchingStep::Run)))
+        .run_if(in_state(GameState::Game));
 }
 
 fn set_prev(

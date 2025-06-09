@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow},
 };
 
-use crate::voxels::block::BlockType;
+use crate::{GameState, voxels::block::BlockType};
 
 pub fn plugin(app: &mut App) {
     app.add_systems(
@@ -15,8 +15,8 @@ pub fn plugin(app: &mut App) {
             focus_events,
             toggle_grab,
             change_speed,
-            toggle_inventory,
-        ),
+        )
+            .run_if(in_state(GameState::Game)),
     );
     app.add_observer(apply_grab);
 }
@@ -24,11 +24,6 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 pub struct Player {
     pub speed: f32,
-}
-
-#[derive(Component)]
-pub struct Inventory {
-    pub storage: [BlockType; 50],
 }
 
 fn player_look(
@@ -168,16 +163,5 @@ fn change_speed(mut player: Single<&mut Player>, inputs: Res<ButtonInput<KeyCode
     }
     if inputs.just_pressed(KeyCode::NumpadMultiply) {
         player.speed = 50. * power;
-    }
-}
-
-fn toggle_inventory(
-    // need access to keyboard inputs
-    inputs: Res<ButtonInput<KeyCode>>,
-    // need access to player
-    mut inventory: Single<&mut Inventory>,
-) {
-    if inputs.just_pressed(KeyCode::KeyI) {
-        return;
     }
 }

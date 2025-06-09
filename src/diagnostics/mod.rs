@@ -20,6 +20,8 @@ mod reporting;
 
 pub use chunk::ChunkCount;
 pub use reporting::MaxValue;
+
+use crate::GameState;
 pub struct MeltdownDiagnosticsPlugin;
 
 impl Plugin for MeltdownDiagnosticsPlugin {
@@ -27,15 +29,21 @@ impl Plugin for MeltdownDiagnosticsPlugin {
         // init our settings
         app.init_resource::<DiagnosticSettings>();
         app.add_plugins((fps::plugin, entity::plugin, chunk::plugin))
-            .add_systems(Update, (toggle_window, on_click_tap))
-            .add_systems(PostStartup, on_init)
-            .add_systems(Update, tab_button_system)
+            .add_systems(
+                Update,
+                (toggle_window, on_click_tap).run_if(in_state(GameState::Game)),
+            )
+            .add_systems(OnEnter(GameState::Menu), on_init)
+            .add_systems(Update, tab_button_system.run_if(in_state(GameState::Game)))
             // .add_observer(slider_observer)
             // .add_observer(slider_drop)
             // .add_observer(slider_start)
             // .add_observer(slider_hover)
             // .add_observer(slider_hover_refined);
-            .add_systems(Update, slider_not_observer);
+            .add_systems(
+                Update,
+                slider_not_observer.run_if(in_state(GameState::Game)),
+            );
         app.init_non_send_resource::<reporting::MaxValue>();
 
         // web doesnt like my shaders

@@ -4,6 +4,7 @@ use phoxels::{PhoxelsPlugin, core::PhoxelGenerator};
 use strum::EnumCount;
 
 use crate::{
+    GameState,
     utils::BlockIter,
     voxels::{
         BlockType, VoxleMaterialHandle,
@@ -23,7 +24,7 @@ pub fn map_plugin(app: &mut App) {
     let noise = MapNoise::new();
     app.init_asset_loader::<ChunkPrefabLoader>()
         .init_resource::<ChunkManager>()
-        .add_systems(Startup, spawn_test)
+        .add_systems(OnEnter(GameState::Game), spawn_test)
         .add_plugins(PhoxelsPlugin::<BlockType, ChunkId>::default());
 
     app.insert_resource(PhoxelGenerator::new(move |id: ChunkId| {

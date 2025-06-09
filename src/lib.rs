@@ -5,6 +5,7 @@ use bevy::scene::ron::de;
 use bevy_console::{AddConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use strum::IntoEnumIterator;
 
+use crate::menu::menu_plugin;
 use crate::voxels::block::BlockType;
 use crate::voxels::map::ChunkData;
 
@@ -14,10 +15,18 @@ pub use utils::BlockIter;
 
 mod console;
 mod diagnostics;
+mod menu;
 mod player;
 mod ui;
 
 const TARGET_TICKTIME: f64 = 100.; // 10 ticks per second
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default, States)]
+enum GameState {
+    #[default]
+    Menu,
+    Game,
+}
 
 pub fn run_game() {
     // this is what the template was doing
@@ -43,16 +52,18 @@ pub fn run_game() {
     });
 
     let mut app = App::new();
-
     app.insert_resource(bevy_pkv::PkvStore::new("Phox", "meltdown_manager"));
 
     app.insert_resource(Time::<Fixed>::from_duration(
         std::time::Duration::from_millis(TARGET_TICKTIME as u64),
     ));
+    app.add_systems(Startup, setup);
+    app.add_plugins(default_plugins);
+    app.init_state::<GameState>();
     app
         // add modifide DefaultPlugin
         .add_plugins((
-            default_plugins,
+            menu_plugin,
             player::plugin,
             voxels::map::map_plugin,
             // add my diagnostics
@@ -60,7 +71,7 @@ pub fn run_game() {
             // only add editor in debug builds
             // editor is not supported on wasm32
         ))
-        .add_systems(Startup, (setup, ui::ui::spawn_crosshair));
+        .add_systems(OnEnter(GameState::Game), ui::ui::spawn_crosshair);
 
     // #[cfg(debug_assertions)]
     // #[cfg(not(target_arch = "wasm32"))]
@@ -78,11 +89,20 @@ pub fn run_game() {
 }
 
 fn setup(mut commands: Commands) {
+    let angle_rad = -45.0f32.to_radians();
+    let cos_angle = angle_rad.cos();
+    let sin_angle = angle_rad.sin();
     commands.spawn((
         Name::new("Player"),
         Camera3d::default(),
         player::Player { speed: 100. },
         IsDefaultUiCamera,
+        Transform::from_matrix(Mat4 {
+            x_axis: Vec4::from_array([1.0, 0.0, 0.0, 0.0]),
+            y_axis: Vec4::from_array([0.0, cos_angle, sin_angle, 0.0]),
+            z_axis: Vec4::from_array([0.0, -sin_angle, cos_angle, 0.0]),
+            w_axis: Vec4::from_array([50.0, 25.0, 50.0, 1.0]),
+        }),
     ));
 }
 
