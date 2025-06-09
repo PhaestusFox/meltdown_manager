@@ -101,6 +101,15 @@ pub fn handle_voxel_interaction(
     }
 }
 
+#[derive(Resource, Default)]
+pub struct AirDebug(pub bool);
+
+pub fn toggle_crosshair(mut crosshair: ResMut<AirDebug>, input: Res<ButtonInput<KeyCode>>) {
+    if input.just_pressed(KeyCode::KeyT) {
+        crosshair.0 = !crosshair.0;
+    }
+}
+
 // New system to update debug UI content
 fn update_debug_ui(
     camera_query: Query<&Transform, (With<Camera3d>, With<Player>)>,
@@ -108,6 +117,7 @@ fn update_debug_ui(
     debug_ui_visible: Res<DebugUIVisible>,
     mut debug_content_query: Query<&mut Text, With<DebugUIContent>>,
     mut debug_panel_query: Query<&mut Node, With<DebugUIPanel>>,
+    air_on: Res<AirDebug>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
         return;
@@ -140,7 +150,7 @@ fn update_debug_ui(
     let ray_hits = raycast_all_blocks(start_pos, forward, max_distance, &chunks_query);
 
     // Format the debug information
-    let mut content = String::from("=== RAYCAST DEBUG ===\n");
+    let mut content = String::from("=== RAYCAST DEBUG ===\nToggle Air View with T\n");
     content.push_str(&format!(
         "Origin: ({:.1}, {:.1}, {:.1})\n",
         start_pos.x, start_pos.y, start_pos.z
@@ -154,7 +164,7 @@ fn update_debug_ui(
 
     if ray_hits.is_empty() {
         content.push_str("No blocks encountered in ray path.");
-    } else {
+    } else if air_on.0 {
         for (i, hit) in ray_hits.iter().enumerate() {
             content.push_str(&format!("--- BLOCK {} ---\n", i + 1));
             content.push_str(&format!("Type: {:?}\n", hit.cell_data.get_block_type()));
@@ -171,6 +181,25 @@ fn update_debug_ui(
                 content.push_str("\n");
             }
         }
+    } else {
+        for (i, hit) in ray_hits.iter().enumerate() {
+            if hit.cell_data.get_block_type() != BlockType::Air {
+                content.push_str(&format!("--- BLOCK {} ---\n", i + 1));
+                content.push_str(&format!("Type: {:?}\n", hit.cell_data.get_block_type()));
+                content.push_str(&format!(
+                    "Position: ({}, {}, {})\n",
+                    hit.voxel_position.x, hit.voxel_position.y, hit.voxel_position.z
+                ));
+                content.push_str(&format!("Distance: {:.2}m\n", hit.distance));
+                content.push_str(&format!("Temperature: {:.1}K\n", hit.cell_data.tempreture));
+                content.push_str(&format!("Energy: {:.2}kJ\n", hit.cell_data.energy));
+                content.push_str(&format!("Density: {:.3}kg/m^3\n", hit.cell_data.density));
+
+                if i < ray_hits.len() - 1 {
+                    content.push_str("\n");
+                }
+            }
+        }
     }
 
     text.0 = content;
@@ -182,17 +211,13 @@ pub fn setup_debug_ui(mut commands: Commands) {
         position_type: PositionType::Absolute,
         top: Val::Percent(0.0),
         right: Val::Percent(0.0),
-        width: Val::Auto, // Dynamic width
-        max_width: Val::Percent(80.0),
+        width: Val::Percent(25.0),
         max_height: Val::Percent(80.0),
         flex_direction: FlexDirection::Column,
-        flex_wrap: FlexWrap::Wrap, // Allow wrapping to new columns
-        padding: UiRect::all(Val::Percent(0.0)),
-        border: UiRect::all(Val::Percent(0.0)),
+        padding: UiRect::all(Val::Percent(0.1)),
+        border: UiRect::all(Val::Percent(0.01)),
         display: Display::Flex,
-        align_items: AlignItems::FlexStart,
-        justify_content: JustifyContent::FlexStart,
-        column_gap: Val::Percent(1.0),
+        overflow: Overflow::scroll_y(),
         ..default()
     };
 
@@ -411,9 +436,11 @@ pub fn find_placement_position(
 
 pub fn voxel_raycast_plugin(app: &mut App) {
     app.insert_resource(DebugUIVisible::default())
+        .insert_resource(AirDebug::default())
         .add_systems(OnEnter(GameState::Game), setup_debug_ui)
         .add_systems(
             Update,
-            (handle_voxel_interaction, update_debug_ui).run_if(in_state(GameState::Game)),
+            (handle_voxel_interaction, update_debug_ui, toggle_crosshair)
+                .run_if(in_state(GameState::Game)),
         );
 }
